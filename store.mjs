@@ -1,3 +1,4 @@
+import {migrateDestinations} from './destination-migration.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -32,6 +33,7 @@ export function openStore(directory) {
  CREATE TABLE IF NOT EXISTS generation_jobs(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES posts(id),post_version INTEGER NOT NULL,kind TEXT NOT NULL,usage TEXT NOT NULL,prompt TEXT NOT NULL,references_json TEXT NOT NULL,status TEXT NOT NULL,provider TEXT,result_media_id TEXT,created_at TEXT NOT NULL);
  `);
  for(const [name,definition] of Object.entries({updated_at:'TEXT',error_code:'TEXT',message:'TEXT',target:'TEXT'}))if(!db.prepare('PRAGMA table_info(publications)').all().some(column=>column.name===name))db.exec('ALTER TABLE publications ADD COLUMN '+name+' '+definition);
+ for(const [name,definition] of Object.entries({body_mode:"TEXT NOT NULL DEFAULT 'manual'",body_source:'TEXT'}))if(!db.prepare('PRAGMA table_info(posts)').all().some(column=>column.name===name))db.exec('ALTER TABLE posts ADD COLUMN '+name+' '+definition);
  if(!db.prepare('PRAGMA table_info(posts)').all().some(column=>column.name==='body_entities'))db.exec('ALTER TABLE posts ADD COLUMN body_entities TEXT');
  if(!db.prepare('PRAGMA table_info(posts)').all().some(column=>column.name==='library_title'))db.exec('ALTER TABLE posts ADD COLUMN library_title TEXT');
  for(const [name,definition] of Object.entries({archived_at:'TEXT',deleted_at:'TEXT',library_revision:'INTEGER NOT NULL DEFAULT 0'}))if(!db.prepare('PRAGMA table_info(posts)').all().some(column=>column.name===name))db.exec('ALTER TABLE posts ADD COLUMN '+name+' '+definition);
@@ -50,6 +52,7 @@ export function openStore(directory) {
      db.exec('COMMIT');
    }catch(error){db.exec('ROLLBACK');throw error;}
  }
+ migrateDestinations(db);
  const keyPath=path.join(directory,'master.key');
  if(!fs.existsSync(keyPath)) {
    if(db.prepare('SELECT count(*) AS n FROM secrets').get().n) throw new Error('کلید رمزگذاری داده‌های موجود پیدا نشد. master.key را از پشتیبان بازیابی کنید.');
@@ -72,5 +75,5 @@ export function openStore(directory) {
  };
 }
 
-export function publicUser(row){return row&&{id:row.id,username:row.username,name:row.name,role:row.role,channels:JSON.parse(row.channels).filter(channel=>activePlatforms.includes(channel)),active:!!row.active};}
+export function publicUser(row){return row&&{id:row.id,username:row.username,name:row.name,role:row.role,channels:JSON.parse(row.channels).filter(channel=>typeof channel==='string'&&channel!=='whatsapp'),active:!!row.active};}
 export function publicPost(row){return row&&{...row,body_entities:row.body_entities?JSON.parse(row.body_entities):[],fields:JSON.parse(row.fields),channels:JSON.parse(row.channels),media:JSON.parse(row.media),publication_media_ids:row.publication_media_ids?JSON.parse(row.publication_media_ids):row.primary_media_id?[row.primary_media_id]:[]};}

@@ -1,3 +1,4 @@
+import {destinationIdentity} from './destinations.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {check} from './content.mjs';
@@ -9,7 +10,7 @@ import {publicationMedia} from './public/media.js';
 import {requestJson} from './network.mjs';
 import {resolveNetworkRoute} from './system-network.mjs';
 import {channelAvailability,sendPost,adapterPreflight} from './publish-adapters.mjs';
-export function publicPublication(row){return {channel_id:row.channel_id,version:row.version,status:row.status,message_ids:JSON.parse(row.message_ids),published_at:row.published_at,updated_at:row.updated_at,message:row.message||'',code:row.error_code||'',target:row.target||''};}
+export function publicPublication(row){return {channel_id:row.channel_id,version:row.version,status:row.status,message_ids:JSON.parse(row.message_ids),published_at:row.published_at,updated_at:row.updated_at,message:row.message||'',code:row.error_code||'',target:row.target||'',channel_name:row.channel_name||'',platform:row.platform||''};}
 export function createPublisher(store,{request=requestJson,resolveRoute=resolveNetworkRoute,recoverInterrupted=true}={}){
  const timestamp=()=>new Date().toISOString(),db=store.db;
  // A process interruption may have happened after delivery; never resume these sends.
@@ -19,10 +20,10 @@ export function createPublisher(store,{request=requestJson,resolveRoute=resolveN
  }
  const receipts=post=>db.prepare('SELECT * FROM publications WHERE post_id=? AND version=? ORDER BY channel_id').all(post.id,post.version).map(publicPublication);
  const getPost=id=>publicPost(db.prepare('SELECT * FROM posts WHERE id=?').get(id));
- async function publish(id,version,actor){
+ async function publish(id,version,actor,{destinations}={}){
   let post=getPost(id);check(post,'محتوا پیدا نشد.',404);check(post.version===version,'نسخهٔ محتوا تغییر کرده است؛ صفحه را تازه کنید.',409);check(libraryState(post)==='active','محتوای بایگانی یا حذف شده قابل انتشار نیست');
   check(post.status!=='publishing','انتشار این محتوا در حال انجام است؛ وضعیت را در کتابخانه بررسی کنید.',409);
-  validateReady(post);check(!post.expires_at||new Date(post.expires_at)>new Date(),'اعتبار این محتوا منقضی شده است.');
+  validateReady(post,db.prepare('SELECT * FROM channels').all());check(!post.expires_at||new Date(post.expires_at)>new Date(),'اعتبار این محتوا منقضی شده است.');
   const files=publicationMedia(post).map(id=>{const row=db.prepare('SELECT * FROM media WHERE id=?').get(id);check(row,'فایل رسانه پیدا نشد.');const file=path.join(store.directory,'media',path.basename(row.path));check(fs.existsSync(file),'فایل رسانه در محل ذخیره‌سازی پیدا نشد.');return {...row,path:file};});
   const tasks=[];
   store.transaction(()=>{
@@ -35,7 +36,7 @@ export function createPublisher(store,{request=requestJson,resolveRoute=resolveN
     let code=availability.code,message=availability.message,status=availability.ready?'sending':'blocked';
     const token=availability.ready?store.secret('token:'+channelId):'';
     if(availability.ready)try{adapterPreflight(post,channel,token,files);}catch(error){status='blocked';code=error.code||'invalid_post';message=error.message;}
-    db.prepare('INSERT INTO publications(id,post_id,channel_id,message_ids,status,version,published_at,updated_at,error_code,message,target) VALUES(?,?,?,?,?,?,NULL,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at,error_code=excluded.error_code,message=excluded.message,target=excluded.target').run(key,id,channelId,'[]',status,version,timestamp(),status==='sending'?'':code,status==='sending'?'در حال ارسال…':message,channel.target||'');
+    db.prepare('INSERT INTO publications(id,post_id,channel_id,message_ids,status,version,published_at,updated_at,error_code,message,target,channel_name,platform) VALUES(?,?,?,?,?,?,NULL,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at,error_code=excluded.error_code,message=excluded.message,target=excluded.target,channel_name=excluded.channel_name,platform=excluded.platform').run(key,id,channelId,'[]',status,version,timestamp(),status==='sending'?'':code,status==='sending'?'در حال ارسال…':message,channel.target||'',channel.name,channel.platform);
     if(status==='sending')tasks.push({key,channel,token,manualProxy:store.secret('proxy:'+channelId)});
    }
    store.audit(actor,'post.publish-start',id,{version,channels:post.channels});

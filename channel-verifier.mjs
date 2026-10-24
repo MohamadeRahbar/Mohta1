@@ -32,7 +32,7 @@ export function connectionReport(detail,channel,configured){
 export function createChannelVerifier(store,{checkAccess=checkChannelAccess}={}){
  const running=new Map();
  function verify(id,actor){
-  const channel=store.db.prepare('SELECT * FROM channels WHERE id=?').get(id);check(channel,'پیام‌رسان پیدا نشد.',404);
+  const channel=store.db.prepare('SELECT * FROM channels WHERE id=?').get(id);check(channel&&!channel.deleted_at,'کانال مقصد پیدا نشد',404);
   const key=id+':'+channel.config_version;if(running.has(key))return running.get(key);
   const task=(async()=>{
    const token=store.secret('token:'+id),proxy=channel.route==='proxy'?store.secret('proxy:'+id):'';

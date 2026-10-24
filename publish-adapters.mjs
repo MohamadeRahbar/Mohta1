@@ -5,6 +5,7 @@ import {eitaaSetupIssue} from './eitaa-access.mjs';
 export const sendPlatforms=['telegram','bale','rubika','eitaa'];
 const bases={telegram:'https://api.telegram.org/',bale:'https://tapi.bale.ai/',rubika:'https://botapi.rubika.ir/'};
 export function channelAvailability(channel,configured){
+ if(!channel||channel.deleted_at)return {ready:false,code:'destination_removed',message:'این مقصد از تنظیمات حذف شده است'};
  if(!sendPlatforms.includes(channel.platform))return {ready:false,code:'adapter_unavailable',message:channel.platform==='whatsapp'?'مسیر ارسال کانال واتس‌اپ هنوز متصل نشده است.':'اتصال ارسال ایتایار هنوز تکمیل نشده است.'};
  if(!channel.enabled)return {ready:false,code:'channel_disabled',message:'این کانال در بخش اتصال غیرفعال است.'};
  if(!configured)return {ready:false,code:'token_missing',message:'توکن ربات این پیام‌رسان ذخیره نشده است.'};

@@ -1,3 +1,4 @@
+import {destinationIdentity} from './destinations.mjs';
 import {randomUUID} from 'node:crypto';
 import {check} from './content.mjs';
 import {validateReady} from './delivery.mjs';
@@ -15,7 +16,8 @@ export function queuePublication(store,post,actor,version,{clock=Date.now}={}){
  const channels=Array.isArray(actor.channels)?actor.channels:JSON.parse(actor.channels);
  check(actor.role==='admin'||post.channels.every(id=>channels.includes(id)),'به کانال انتخاب شده دسترسی ندارید',403);
  if(version!==undefined||post.scheduled_at)check(version===post.version,'نسخه محتوا تغییر کرده است، دوباره محتوا را بررسی کنید',409);
- validateReady(post);
+ validateReady(post,store.db.prepare('SELECT * FROM channels').all());
+ const destinations=destinationIdentity(store,post.channels);
  const time=clock(),runAt=post.scheduled_at;
  check(!post.expires_at||Date.parse(post.expires_at)>time,'اعتبار محتوا منقضی شده است');
  if(runAt){
@@ -26,7 +28,7 @@ export function queuePublication(store,post,actor,version,{clock=Date.now}={}){
   const changed=store.db.prepare("UPDATE posts SET status='ready',updated_at=? WHERE id=? AND version=? AND status='draft' AND archived_at IS NULL AND deleted_at IS NULL").run(new Date(time).toISOString(),post.id,post.version);
   check(changed.changes===1,'نسخه یا وضعیت محتوا تغییر کرده است',409);
   cancelScheduled(store,post.id);
-  if(runAt)store.db.prepare("INSERT INTO scheduled_publications(post_id,run_id,version,run_at,actor_id,state,updated_at) VALUES(?,?,?,?,?,'queued',?) ON CONFLICT(post_id) DO UPDATE SET run_id=excluded.run_id,version=excluded.version,run_at=excluded.run_at,actor_id=excluded.actor_id,state='queued',message='',updated_at=excluded.updated_at").run(post.id,randomUUID(),post.version,runAt,actor.id,new Date(time).toISOString());
+  if(runAt)store.db.prepare("INSERT INTO scheduled_publications(post_id,run_id,version,run_at,actor_id,state,updated_at,destination_snapshot) VALUES(?,?,?,?,?,'queued',?,?) ON CONFLICT(post_id) DO UPDATE SET run_id=excluded.run_id,version=excluded.version,run_at=excluded.run_at,actor_id=excluded.actor_id,destination_snapshot=excluded.destination_snapshot,state='queued',message='',updated_at=excluded.updated_at").run(post.id,randomUUID(),post.version,runAt,actor.id,new Date(time).toISOString(),JSON.stringify(destinations));
   store.audit(actor.id,'post.ready',post.id,{version:post.version,scheduledAt:runAt,automatic:!!runAt});
  });
  return {ok:true,automatic:!!runAt};
@@ -54,7 +56,8 @@ export function createScheduler(store,publisher,{resolveActor,clock=Date.now,rec
     const actor=resolveActor(job.actor_id),channels=actor&&(Array.isArray(actor.channels)?actor.channels:JSON.parse(actor.channels));
     check(actor?.active&&['admin','publisher'].includes(actor.role)&&(actor.role==='admin'||post.channels.every(id=>channels.includes(id))),'ارسال خودکار انجام نشد چون دسترسی تایید کننده تغییر کرده است',403);
     check(!post.expires_at||Date.parse(post.expires_at)>clock(),'ارسال خودکار انجام نشد چون اعتبار محتوا منقضی شده است');
-    const result=await publisher.publish(post.id,job.version,actor.id);
+    check(job.destination_snapshot&&JSON.stringify(destinationIdentity(store,post.channels))===job.destination_snapshot,'مقصد تایید شده تغییر کرده است محتوا را دوباره بررسی کنید');
+    const result=await publisher.publish(post.id,job.version,actor.id,{destinations:JSON.parse(job.destination_snapshot)});
     finish(job,result.sent===result.total?'completed':'failed',result.sent===result.total?'در زمان تعیین شده ارسال شد':'ارسال کامل نشد، نتیجه هر کانال را بررسی کنید ارسال خودکار تکرار نمیشود');
    }catch(error){
     // Never echo raw provider/network exceptions or retry ambiguous deliveries.
