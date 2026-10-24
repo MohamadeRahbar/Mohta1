@@ -33,5 +33,3 @@ git clone https://github.com/MohamadeRahbar/mohta1.git
 cd mohta1
 git checkout v0.1.0
 ```
-
-این تگ فقط کد را بازیابی میکند و جایگزین پشتیبان محلی داده و کلید آن نیست
