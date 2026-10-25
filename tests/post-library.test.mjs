@@ -81,3 +81,10 @@ test('HTTP endpoints enforce library guards, CSRF, user scope and workspace isol
  const next=await owner('/api/workspaces','POST',{name:'Second brand'});assert.equal(next.status,201);await owner('/api/workspaces/select','POST',{id:next.value.workspace.id});await owner('/api/state');assert.equal((await owner('/api/posts/library-actions','POST',{action:'delete',posts:[{...reference,library_revision:2}]})).status,404);
  db=new DatabaseSync(path.join(dir,'desk.sqlite'));assert.equal(db.prepare('SELECT deleted_at FROM posts WHERE id=?').get(post.id).deleted_at,null);
 });
+
+test('summary agrees with placement, handles legacy archive and isolates actionable partial outcomes',async()=>{
+ const {librarySummary,filterLibrary}=await import('../public/post-library.js');
+ const base={title:'Sample',type:'free'},posts=[{...base,status:'draft'},{...base,status:'ready'},{...base,status:'partial'},{...base,status:'uncertain'},{...base,status:'published',archived_at:'today'},{...base,status:'archived'},{...base,status:'published',archived_at:'today',deleted_at:'today'}];
+ assert.deepEqual(librarySummary(posts),{active:4,archived:2,deleted:1,draft:1,ready:1,published:0,attention:2,types:{free:4}});
+ assert.deepEqual(filterLibrary(posts,{filter:'attention'}).map(p=>p.status),['partial','uncertain']);
+});

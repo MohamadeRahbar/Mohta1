@@ -31,6 +31,7 @@ export function validateFields(type,fields){
 export function renderContent(type,title,fields,settings){return renderContentDocument(type,title,fields,settings).body;}
 
 export function prepareDocument(data,title,fields,settings,previousTitle=''){
+ if(data.body_mode==='manual'){text(data.body??'',15000);return cleanDocument(data.body??'',data.body_entities||[]);}
  const generated=renderContentDocument(data.type,title,fields,settings);
  if(!data.body)return generated;
  const raw=text(data.body,15000),provided=data.body_entities===undefined?(raw===generated.body?generated.entities:[]):data.body_entities;
@@ -38,4 +39,9 @@ export function prepareDocument(data,title,fields,settings,previousTitle=''){
  if(data.type==='free')return document;
  const body=alignHeadline(title,document.body,previousTitle);
  return {body,entities:rebaseEntities(document.body,body,document.entities)};
+}
+
+export function composerMetadata(data,previous={}){
+ check(data.body_mode===undefined||['manual','generated'].includes(data.body_mode),'حالت متن معتبر نیست');
+ return {body_mode:data.body_mode||(data.body!==undefined?'manual':previous.body_mode||'generated'),body_source:data.body_source?text(data.body_source,100000):previous.body_source||null};
 }

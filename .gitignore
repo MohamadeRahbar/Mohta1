@@ -21,3 +21,4 @@ artifacts/
 *.png
 !public/logos/*.png
 qa-local/
+STATUS.fa.md

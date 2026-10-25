@@ -72,7 +72,7 @@ export function mountGuidance({roots,context,storage}){
  function headingFor(note){
   if(note.dataset.guidanceNote==='dashboard-start')return document.querySelector('.main .topbar h1');
   const section=note.closest('[data-settings-accordion],.panel,.channel-card,.modal');
-  return section?.querySelector(':scope>summary h2,:scope>summary h3,:scope>summary h4,:scope>.panel-head h2,:scope>.panel-head h3,:scope>.channel-title h2,:scope>h2,:scope>.section-heading>h2,:scope>.panel-body>.instant-publish-info h3')||document.querySelector('.main .topbar h1');
+  return section?.querySelector(':scope>summary h2,:scope>summary h3,:scope>summary h4,:scope>.panel-head h2,:scope>.panel-head h3,:scope>.channel-title h2,:scope>h2,:scope>.section-heading>h2')||document.querySelector('.main .topbar h1');
  }
  function groupFor(heading){
   if(!heading)return null;let group=groups.get(heading);if(group)return group;

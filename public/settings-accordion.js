@@ -97,7 +97,7 @@ export function mountSettingsAccordions(root,{scope='',sections=null,defaultOpen
  function scan(){
   frame=0;if(stopped)return;
   for(const [details,record] of records)if(!details.isConnected){record.motion?.cancel();sizes?.unobserve(record.inner);records.delete(details);}
-  for(const [selector,key] of sections||[['.workspace-settings','brands'],['.account-settings','account'],['.brand-identity','identity'],['.brand-name-settings','brand-name'],['#brand-contacts-title','contacts'],['.brand-connections','connections'],['.settings-channels','channels'],['.settings-ai','ai'],['.settings-access','access'],['.settings-team','team'],['.settings-activity','activity']]){
+  for(const [selector,key] of sections||[['.workspace-settings','brands'],['.account-settings','account'],['.brand-identity','identity'],['.brand-time-settings','timezone'],['.brand-name-settings','brand-name'],['#brand-contacts-title','contacts'],['.brand-connections','connections'],['.settings-channels','channels'],['.settings-ai','ai'],['.settings-access','access'],['.settings-team','team'],['.settings-activity','activity']]){
    const selected=root.querySelector(selector),section=selector.startsWith('#')?selected?.closest('.panel'):selected;
    const head=section?.querySelector(':scope>.panel-head');if(section&&head)convert(section,key,head);
   }
