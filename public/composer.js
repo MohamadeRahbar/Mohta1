@@ -25,9 +25,3 @@ export function rebuildComposer(editor,data,settings){
 }
 
 export function undoComposer(editor){return editor.caption_undo?{...editor,...editor.caption_undo,caption_undo:null}:editor;}
-
-export function changeComposerType(editor,data,next){
- const cache={...editor.type_fields,[editor.type]:data.fields};
- const fields=cache[next]||{description:data.body,description_entities:data.body_entities};
- return {...editor,...data,type:next,type_fields:cache,fields,title:data.title||(next==='free'?'':data.body.split('\n')[0].slice(0,240)),body_mode:data.body_mode==='manual'||data.body?'manual':'generated',body_source:null};
-}

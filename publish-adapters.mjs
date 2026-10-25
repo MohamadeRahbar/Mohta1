@@ -37,8 +37,8 @@ export function baleText(body,entities=[]){
   return leading+(/\s/.test(before)?'':' ')+part+(/\s/.test(after)?'':' ')+trailing;
  }).join('');
 }
-export function adapterPreflight(post,channel,token,files){
- const platform=channel.platform,payload=delivery(post,platform),body=payload.caption??payload.text;
+export function adapterPreflight(post,channel,token,files,prepared){
+ const platform=channel.platform,payload=prepared||delivery(post,platform),body=payload.caption??payload.text;
  if(['telegram','bale'].includes(platform)){
   if(!/^\d+:[A-Za-z0-9_-]{20,}$/.test(token))throw refusal('token_invalid','ساختار توکن ربات معتبر نیست.');
   if(!telegramTarget(channel.target))throw refusal('target_invalid','شناسهٔ کانال باید @username یا شناسهٔ عددی کانال باشد.');
@@ -55,8 +55,8 @@ export function adapterPreflight(post,channel,token,files){
  if(files.some(f=>f.mime.startsWith('image/')&&f.size>10*1024*1024)&&['telegram','rubika'].includes(platform))throw refusal('photo_limit','برای این پیام‌رسان، اندازهٔ هر تصویر باید حداکثر ۱۰ مگابایت باشد.');
  return payload;
 }
-export async function sendPost(post,channel,{token,files,request,resolveRoute,manualProxy}){
- const platform=channel.platform,payload=adapterPreflight(post,channel,token,files),base=bases[platform];let target=platform==='rubika'?channel.target:telegramTarget(channel.target);
+export async function sendPost(post,channel,{token,files,request,resolveRoute,manualProxy,replyTo,pin=false,transformPayload}){
+ const platform=channel.platform,prepared=transformPayload?transformPayload(delivery(post,platform)):null,payload=adapterPreflight(post,channel,token,files,prepared),base=bases[platform];let target=platform==='rubika'?channel.target:telegramTarget(channel.target);
  let sending=false;
  async function call(url,options,final=false){
   let route;try{route=await resolveRoute(channel,url,{manualProxy});}catch{throw refusal('route_invalid','مسیر شبکهٔ این پیام‌رسان قابل استفاده نیست.');}
@@ -73,7 +73,7 @@ export async function sendPost(post,channel,{token,files,request,resolveRoute,ma
   const account=unpack(platform,await call(eitaaEndpoint('getMe'),{method:'GET'}));
   if(!account||!(Number.isSafeInteger(account.id)&&account.id>0||typeof account.id==='string'&&/^[1-9]\d{0,24}$/.test(account.id)))throw refusal('invalid_response','اطلاعات معتبر حساب ایتایار دریافت نشد؛ ارسال انجام نشد.');
   target=channel.target.trim().replace(/^@/,'');
-  const fields={chat_id:target,title:post.library_title||post.title};
+  const fields={chat_id:target,title:post.library_title||post.title,...(pin?{pin:1}:{}),...(replyTo?{reply_to_message_id:replyTo.messageId}:{})};
   const response=files.length?await call(eitaaEndpoint('sendFile'),{method:'POST',...multipart({...fields,caption:payload.caption},[{...files[0],field:'file'}])},true):await call(eitaaEndpoint('sendMessage'),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},rawBody:new URLSearchParams({...fields,text:payload.text}).toString()},true);
   if(response?.data?.ok===false){
     const description=String(response.data.description||response.data.message||'').toLowerCase();
@@ -91,21 +91,24 @@ export async function sendPost(post,channel,{token,files,request,resolveRoute,ma
   if(typeof chat.chat_id!=='string'||!/^[A-Za-z0-9_-]{6,200}$/.test(chat.chat_id))throw refusal('target_invalid','شناسهٔ معتبر کانال از روبیکا دریافت نشد.');
   target=chat.chat_id;
  }
+ if(replyTo&&String(chat?.id||chat?.chat_id||target)!==String(replyTo.target))throw refusal('reply_target_changed','هویت کانال پیام مرجع تغییر کرده است');
+ const replyFields=replyTo?(platform==='telegram'?{reply_parameters:{message_id:replyTo.messageId,allow_sending_without_reply:false}}:{reply_to_message_id:replyTo.messageId}):{};
+ const sendCall=(method,options)=>call(endpoint(method),{...options,body:options.body?{...options.body,...replyFields}:options.body},true);
  let response;
  if(platform==='rubika'){
   const body=payload.caption??payload.text;
-  if(!files.length){const types={bold:'Bold',italic:'Italic',underline:'Underline',text_link:'Link'};const parts=payload.entities.filter(e=>types[e.type]).map(e=>({type:types[e.type],from_index:e.offset,length:e.length,...(e.url?{link_url:e.url}:{})}));if(parts.length>30)throw refusal('format_limit','قالب‌بندی روبیکا بیش از ۳۰ بخش است؛ تعداد قالب‌بندی‌ها را کم کنید.');response=await call(endpoint('sendMessage'),{method:'POST',body:{chat_id:target,text:body,...(parts.length?{metadata:{meta_data_parts:parts}}:{})}},true);}
+  if(!files.length){const types={bold:'Bold',italic:'Italic',underline:'Underline',text_link:'Link'};const parts=payload.entities.filter(e=>types[e.type]).map(e=>({type:types[e.type],from_index:e.offset,length:e.length,...(e.url?{link_url:e.url}:{})}));if(parts.length>30)throw refusal('format_limit','قالب‌بندی روبیکا بیش از ۳۰ بخش است؛ تعداد قالب‌بندی‌ها را کم کنید.');response=await sendCall('sendMessage',{method:'POST',body:{chat_id:target,text:body,...(parts.length?{metadata:{meta_data_parts:parts}}:{})}});}
   else{
    const upload=unpack(platform,await call(endpoint('requestSendFile'),{method:'POST',body:{type:files[0].mime.startsWith('video/')?'Video':'Image'}}));let url;try{url=new URL(upload.upload_url);}catch{throw refusal('upload_invalid','آدرس معتبر بارگذاری از روبیکا دریافت نشد.');}
    if(url.protocol!=='https:'||url.username||url.password||(url.port&&url.port!=='443')||!['rubika.ir','iranlms.ir'].some(domain=>url.hostname===domain||url.hostname.endsWith('.'+domain)))throw refusal('upload_invalid','سرور بارگذاری روبیکا تأیید نشد.');
    const result=unpack(platform,await call(url.href,{method:'POST',...multipart({},[{...files[0],field:'file'}])}));if(typeof result.file_id!=='string'||!result.file_id)throw refusal('upload_invalid','شناسهٔ فایل از روبیکا دریافت نشد.');
-   response=await call(endpoint('sendFile'),{method:'POST',body:{chat_id:target,file_id:result.file_id,text:body}},true);
+   response=await sendCall('sendFile',{method:'POST',body:{chat_id:target,file_id:result.file_id,text:body}});
   }
  }else{
   const body=platform==='bale'?baleText(payload.caption??payload.text,payload.entities):(payload.caption??payload.text),styles=platform==='telegram'?payload.entities:undefined;
-  if(!files.length)response=await call(endpoint('sendMessage'),{method:'POST',body:{chat_id:target,text:body,...(styles?{entities:styles}:{}),...(platform==='telegram'?{link_preview_options:{is_disabled:true}}:{})}},true);
-  else if(files.length===1){const field=files[0].mime.startsWith('video/')?'video':'photo';response=await call(endpoint(field==='video'?'sendVideo':'sendPhoto'),{method:'POST',...multipart({chat_id:target,caption:body,caption_entities:styles},[{...files[0],field}])},true);}
-  else{const media=files.map((file,index)=>({type:file.mime.startsWith('video/')?'video':'photo',media:'attach://asset'+index,...(index===0?{caption:body,...(styles?{caption_entities:styles}:{})}:{})}));response=await call(endpoint('sendMediaGroup'),{method:'POST',...multipart({chat_id:target,media},files.map((file,index)=>({...file,field:'asset'+index})))},true);}
+  if(!files.length)response=await sendCall('sendMessage',{method:'POST',body:{chat_id:target,text:body,...(styles?{entities:styles}:{}),...(platform==='telegram'?{link_preview_options:{is_disabled:true}}:{})}});
+  else if(files.length===1){const field=files[0].mime.startsWith('video/')?'video':'photo';response=await call(endpoint(field==='video'?'sendVideo':'sendPhoto'),{method:'POST',...multipart({chat_id:target,caption:body,caption_entities:styles,...replyFields},[{...files[0],field}])},true);}
+  else{const media=files.map((file,index)=>({type:file.mime.startsWith('video/')?'video':'photo',media:'attach://asset'+index,...(index===0?{caption:body,...(styles?{caption_entities:styles}:{})}:{})}));response=await call(endpoint('sendMediaGroup'),{method:'POST',...multipart({chat_id:target,media,...replyFields},files.map((file,index)=>({...file,field:'asset'+index})))},true);}
  }
  const result=unpack(platform,response),messages=Array.isArray(result)?result:[result];
  const ids=messages.map(message=>message?.message_id).filter(id=>(typeof id==='string'&&id.length>0&&id.length<200)||(Number.isSafeInteger(id)&&id>0));

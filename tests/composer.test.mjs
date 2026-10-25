@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {syncComposer,editComposer,rebuildComposer,undoComposer,signatureOf,changeComposerType} from '../public/composer.js';
+import {syncComposer,editComposer,rebuildComposer,undoComposer,signatureOf} from '../public/composer.js';
 import {prepareDocument} from '../content.mjs';
 
 const input={type:'stock',title:'Headline',fields:{brand:'HPE',model:'DL380',description:'Original'},channels:['telegram'],media:[]};
@@ -24,12 +24,6 @@ test('an empty manual caption stays empty and free message labels are independen
  const free={type:'free',title:'Internal',fields:{description:'Message'}};
  assert.equal(signatureOf(free),signatureOf({...free,title:'New internal label'}));
  const generated=syncComposer({body_mode:'generated'},free,{});assert.equal(generated.body,'Message');
-});
-
-test('changing templates preserves the message, media order, schedule and cached specialized fields',()=>{
- const original={...input,fields:{...input.fields,price:'100'},body:'Exact edited message',body_entities:[{type:'bold',offset:0,length:5}],body_mode:'manual',media:['one','two'],publication_media_ids:['two','one'],scheduled_at:'2030-01-01T00:00:00Z'};
- const free=changeComposerType(original,original,'free');assert.equal(free.body,original.body);assert.deepEqual(free.publication_media_ids,['two','one']);assert.equal(free.scheduled_at,original.scheduled_at);
- const restored=changeComposerType(free,free,'stock');assert.deepEqual(restored.fields,original.fields);assert.equal(restored.body,original.body);assert.deepEqual(restored.body_entities,original.body_entities);
 });
 
 test('manual text boundary whitespace does not corrupt UTF-16 formatting offsets',()=>{

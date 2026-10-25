@@ -30,7 +30,7 @@ import {DatabaseSync} from 'node:sqlite';
 const root=process.env.MOTAVAN_STOP_DATA_DIR,catalog=path.join(root,'workspaces.sqlite');
 if(fs.existsSync(catalog)){
  const db=new DatabaseSync(catalog,{readOnly:true}),brands=db.prepare('SELECT id FROM workspaces').all();db.close();
- for(const {id} of brands){const file=path.join(root,id==='default'?'':'brands/'+id,'desk.sqlite');if(!fs.existsSync(file))continue;const tenant=new DatabaseSync(file,{readOnly:true});const active=tenant.prepare("SELECT count(*) AS n FROM publications WHERE status='sending'").get().n;tenant.close();if(active)throw Error('Publishing is in progress; stop postponed');}
+ for(const {id} of brands){const file=path.join(root,id==='default'?'':'brands/'+id,'desk.sqlite');if(!fs.existsSync(file))continue;const tenant=new DatabaseSync(file,{readOnly:true});const active=tenant.prepare("SELECT count(*) AS n FROM publications WHERE status='sending'").get().n,hasControls=tenant.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_operations'").get(),operations=hasControls?tenant.prepare("SELECT count(*) AS n FROM message_operations WHERE status='running'").get().n:0;tenant.close();if(active||operations)throw Error('Publishing or message control is in progress; stop postponed');}
 }
 '@
  $check | & (Get-Command node).Source --input-type=module

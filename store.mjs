@@ -1,4 +1,5 @@
 import {migrateDestinations} from './destination-migration.mjs';
+import {migrateMessageControls} from './message-schema.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -10,7 +11,7 @@ export const activePlatforms = platforms.filter(platform=>platform!=='whatsapp')
 export const typeNames = {stock:'محصول موجود در انبار',proof:'اعتمادسازی و پشت‌صحنه',prices:'لیست قیمت و تأمین',blog:'بلاگی و آموزشی',free:'پیام آزاد'};
 export const platformNames = {telegram:'تلگرام',bale:'بله',rubika:'روبیکا',whatsapp:'واتس‌اپ',eitaa:'ایتا'};
 export const appName = 'محتوان';
-export const defaultSettings = {projectName:appName,brandLogoId:'',brand:'',contact:'',contacts:{phones:[],admins:{}},website:'',currency:'تومان',timezone:'Asia/Tehran'};
+export const defaultSettings = {projectName:appName,brandLogoId:'',brand:'',contact:'',contacts:{phones:[],admins:{}},website:'',currency:'تومان',timezone:'Asia/Tehran',trackingEnabled:false};
 
 export function openStore(directory) {
  fs.mkdirSync(directory,{recursive:true});
@@ -53,6 +54,7 @@ export function openStore(directory) {
    }catch(error){db.exec('ROLLBACK');throw error;}
  }
  migrateDestinations(db);
+ migrateMessageControls(db);
  const keyPath=path.join(directory,'master.key');
  if(!fs.existsSync(keyPath)) {
    if(db.prepare('SELECT count(*) AS n FROM secrets').get().n) throw new Error('کلید رمزگذاری داده‌های موجود پیدا نشد. master.key را از پشتیبان بازیابی کنید.');
@@ -76,4 +78,4 @@ export function openStore(directory) {
 }
 
 export function publicUser(row){return row&&{id:row.id,username:row.username,name:row.name,role:row.role,channels:JSON.parse(row.channels).filter(channel=>typeof channel==='string'&&channel!=='whatsapp'),active:!!row.active};}
-export function publicPost(row){return row&&{...row,body_entities:row.body_entities?JSON.parse(row.body_entities):[],fields:JSON.parse(row.fields),channels:JSON.parse(row.channels),media:JSON.parse(row.media),publication_media_ids:row.publication_media_ids?JSON.parse(row.publication_media_ids):row.primary_media_id?[row.primary_media_id]:[]};}
+export function publicPost(row){return row&&{...row,remote_media:row.remote_media?JSON.parse(row.remote_media):null,publish_options:JSON.parse(row.publish_options||'{}'),remote_entities:row.remote_entities?JSON.parse(row.remote_entities):null,body_entities:row.body_entities?JSON.parse(row.body_entities):[],fields:JSON.parse(row.fields),channels:JSON.parse(row.channels),media:JSON.parse(row.media),publication_media_ids:row.publication_media_ids?JSON.parse(row.publication_media_ids):row.primary_media_id?[row.primary_media_id]:[]};}

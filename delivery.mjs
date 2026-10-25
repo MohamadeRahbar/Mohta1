@@ -2,13 +2,15 @@ import {normalizeEntities} from './public/rich-text.js';
 import {check} from './content.mjs';
 import {appendContacts,contactEntities} from './public/contacts.js';
 import {publicationMedia} from './public/media.js';
+import {rubikaEntities} from './public/rubika-format.js';
 
 // A post has either one media item or an ordered album with one caption.
 export function delivery(post,destination=post.channels?.[0]||'telegram') {
  const platform=typeof destination==='object'?destination.platform:destination;
  const mediaIds=publicationMedia(post),mediaId=mediaIds[0]||null;
  const rendered=appendContacts(post.body,post.type==='free'?undefined:post.fields?.contact_config,platform),headline=post.body.split('\n')[0];
- const entities=[...normalizeEntities(post.body,[...(headline&&post.type!=='free'?[{type:'bold',offset:0,length:headline.length}]:[]),...(post.body_entities||[])]),...contactEntities(rendered.links,platform)];
+ const sourceEntities=[...normalizeEntities(post.body,[...(headline&&post.type!=='free'?[{type:'bold',offset:0,length:headline.length}]:[]),...(post.body_entities||[])]),...contactEntities(rendered.links,platform)];
+ const entities=platform==='rubika'?rubikaEntities(rendered.body,sourceEntities):sourceEntities;
  return {mode:mediaIds.length>1?'media_album':mediaId?'media_caption':'text',mediaId,caption:mediaId?rendered.body:null,text:mediaId?null:rendered.body,entities,messageCount:mediaIds.length||1,...(mediaIds.length>1?{mediaIds,captionCount:1,grouped:true}:{})};
 }
 
