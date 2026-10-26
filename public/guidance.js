@@ -27,7 +27,7 @@ export function normalizeHelpItems(items){
 const candidates='[data-help-note],[data-guidance-note],.help,.form-note,.status-line,.net-hint:not(.access-result),label.field>small';
 const excluded='.error,.video-error,[role="alert"],.access-result,.form-result,.publication-result,.preview-message,.rich-input,.auth-page,#caption-count,#preview-error,#ai-connection-message,#brand-logo-error';
 export function mountGuidance({roots,context,storage}){
- const document=roots[0].ownerDocument,window=document.defaultView,store=createGuidanceStore(storage),events=new AbortController(),groups=new Map(),sources=new WeakMap(),banners=new WeakMap();
+ const document=roots[0].ownerDocument,window=document.defaultView,store=createGuidanceStore(storage),events=new AbortController(),groups=new Map(),sources=new WeakMap(),banners=new WeakMap(),bannerMotions=new Map(),anchorLocks=new Map();
  const tooltip=document.createElement('div');tooltip.id='desk-section-tooltip';tooltip.className='help-tooltip';tooltip.dir='rtl';tooltip.role='tooltip';tooltip.hidden=true;document.body.append(tooltip);
  let enabled=false,generation=0,frame=0,openTimer=0,closeTimer=0,active=null,pinned=false,motion=null,labelSerial=0;
  const clean=node=>{const copy=node.cloneNode(true);for(const control of copy.querySelectorAll('.guidance-close,.help-trigger'))control.remove();return copy.textContent.trim().replace(/\s+/g,' ');};
@@ -110,16 +110,28 @@ export function mountGuidance({roots,context,storage}){
  }
  function registerBanner(note){
   if(!store.key||banners.get(note)===store.key)return;
+  cancelBannerMotion(note);
   note.querySelector(':scope>.guidance-close')?.remove();note.hidden=false;note.inert=false;delete note.dataset.guidanceDismissed;
   const id=note.dataset.guidanceNote;banners.set(note,store.key);note.dataset.guidanceId=id;note.classList.add('guidance-note');
   const button=document.createElement('button');button.type='button';button.className='guidance-close';button.setAttribute('aria-label','بستن اطلاعیه');button.innerHTML='<span aria-hidden="true">×</span>';
   button.addEventListener('click',event=>{event.preventDefault();store.dismiss(id);dismissBanner(note,true);});note.prepend(button);if(store.has(id))dismissBanner(note);
  }
+ function lockScrollAnchor(scroller){
+  if(!scroller)return ()=>{};let lock=anchorLocks.get(scroller);
+  if(!lock){lock={value:scroller.style.overflowAnchor,count:0};anchorLocks.set(scroller,lock);scroller.style.overflowAnchor='none';}lock.count++;
+  return ()=>{if(--lock.count===0){scroller.style.overflowAnchor=lock.value;anchorLocks.delete(scroller);}};
+ }
+ function cancelBannerMotion(note){const record=bannerMotions.get(note);if(!record)return;bannerMotions.delete(note);record.fade.cancel();record.release();}
+ function cancelBannerMotions(){for(const note of bannerMotions.keys()){note.hidden=true;cancelBannerMotion(note);}}
  function dismissBanner(note,animate=false){
   if(note.dataset.guidanceDismissed)return;note.dataset.guidanceDismissed='true';note.inert=true;
   if(!animate||reduced()){note.hidden=true;return;}
-  const height=note.getBoundingClientRect().height,style=window.getComputedStyle(note),fade=note.animate([{height:height+'px',opacity:1,paddingTop:style.paddingTop,paddingBottom:style.paddingBottom,marginBottom:style.marginBottom,overflow:'hidden'},{height:'0px',opacity:0,paddingTop:'0px',paddingBottom:'0px',marginBottom:'0px',overflow:'hidden'}],{duration:200,easing:'ease-out'});
-  fade.finished.catch(()=>{}).then(()=>{note.hidden=true;fade.cancel();});
+  const height=note.getBoundingClientRect().height,style=window.getComputedStyle(note),release=lockScrollAnchor(note.closest('.main,.preview-scroll,.modal'));
+  // The last animation frame must occupy exactly zero space, including borders and minimum size.
+  const fade=note.animate([{height:height+'px',minHeight:'0px',boxSizing:'border-box',opacity:1,paddingTop:(parseFloat(style.paddingTop)+parseFloat(style.borderTopWidth))+'px',paddingBottom:(parseFloat(style.paddingBottom)+parseFloat(style.borderBottomWidth))+'px',marginTop:style.marginTop,marginBottom:style.marginBottom,borderTopWidth:'0px',borderBottomWidth:'0px',overflow:'hidden'},{height:'0px',minHeight:'0px',boxSizing:'border-box',opacity:0,paddingTop:'0px',paddingBottom:'0px',marginTop:'0px',marginBottom:'0px',borderTopWidth:'0px',borderBottomWidth:'0px',overflow:'hidden'}],{duration:260,easing:'cubic-bezier(.2,.7,.3,1)',fill:'both'});
+  const record={fade,release};bannerMotions.set(note,record);
+  const finish=()=>{if(bannerMotions.get(note)!==record)return;note.hidden=true;bannerMotions.delete(note);fade.cancel();release();};
+  fade.finished.then(finish,finish);
  }
  function scan(){
   frame=0;if(!enabled)return;
@@ -136,9 +148,9 @@ export function mountGuidance({roots,context,storage}){
  document.addEventListener('scroll',event=>{if(event.target!==tooltip)positionTooltip();},{capture:true,passive:true,signal:events.signal});
  window.addEventListener('storage',event=>{if(event.key===store.key)for(const root of roots)for(const note of root.querySelectorAll('.banner[data-guidance-id]'))if(store.has(note.dataset.guidanceId))dismissBanner(note);},{signal:events.signal});
  return {
-  async setContext({accountId,workspaceId,sessionKey}){const current=++generation,scope=await guidanceScope(accountId,workspaceId,sessionKey);if(current!==generation)return;if(store.key!==scope?.key)hideTooltip(true);store.use(scope);enabled=!!scope;scan();},
-  deactivate(){generation++;enabled=false;store.use(null);hideTooltip(true);},
-  clearSession(){generation++;enabled=false;store.clearSession();hideTooltip(true);},
-  destroy(){enabled=false;observer.disconnect();events.abort();cancelTimers();if(frame)window.cancelAnimationFrame(frame);motion?.cancel();tooltip.remove();for(const [heading,group] of groups){for(const note of group.notes.keys())restore(note);group.button.remove();if(group.wrapper.isConnected)group.wrapper.replaceWith(heading);}groups.clear();}
+  async setContext({accountId,workspaceId,sessionKey}){const current=++generation,scope=await guidanceScope(accountId,workspaceId,sessionKey);if(current!==generation)return;if(store.key!==scope?.key){hideTooltip(true);cancelBannerMotions();}store.use(scope);enabled=!!scope;scan();},
+  deactivate(){generation++;enabled=false;store.use(null);hideTooltip(true);cancelBannerMotions();},
+  clearSession(){generation++;enabled=false;store.clearSession();hideTooltip(true);cancelBannerMotions();},
+  destroy(){enabled=false;observer.disconnect();events.abort();cancelTimers();if(frame)window.cancelAnimationFrame(frame);motion?.cancel();cancelBannerMotions();tooltip.remove();for(const [heading,group] of groups){for(const note of group.notes.keys())restore(note);group.button.remove();if(group.wrapper.isConnected)group.wrapper.replaceWith(heading);}groups.clear();}
  };
 }
