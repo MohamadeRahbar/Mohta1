@@ -1,4 +1,8 @@
 // Library placement is independent of delivery status and publication receipts
+export function copyLibraryTitle(post){
+ const suffix=' (کپی)',name=(post.library_title||post.title||'پیام').trim();
+ return name.slice(0,240-suffix.length).replace(/[\uD800-\uDBFF]$/u,'').trimEnd()+suffix;
+}
 export function libraryState(post){return post.deleted_at?'deleted':post.archived_at||post.status==='archived'?'archived':'active';}
 export function needsAttention(post){return libraryState(post)==='active'&&['partial','uncertain'].includes(post.status);}
 export function librarySummary(posts){

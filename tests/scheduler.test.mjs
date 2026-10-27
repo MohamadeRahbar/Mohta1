@@ -6,7 +6,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {openStore,publicPost} from '../store.mjs';
 import {createPublisher} from '../publisher.mjs';
-import {queuePublication,createScheduler,cancelScheduled} from '../scheduler.mjs';
+import {queuePublication,createScheduler,cancelScheduled,reconcileScheduledResult} from '../scheduler.mjs';
 import {changePostLibrary} from '../post-library.mjs';
 
 function fixture(t,channels=['telegram','bale']){
@@ -22,6 +22,40 @@ function fixture(t,channels=['telegram','bale']){
  t.after(()=>{store.close();fs.rmSync(directory,{recursive:true,force:true});});
  return {get store(){return store;},actor,id,read,job,services,get sends(){return sends;},advance(ms=60000){time+=ms;},queue(){return queuePublication(store,read(),actor,read().version,{clock:()=>time});},restart(){store.close();store=openStore(directory);}};
 }
+
+test('a stale failed job is completed on recovery only when every current destination is confirmed',async t=>{
+ const f=fixture(t);f.queue();f.store.db.prepare("UPDATE scheduled_publications SET state='failed',message='original failure'").run();
+ f.store.db.prepare("UPDATE posts SET status='published'").run();
+ for(const channel of ['telegram','bale'])f.store.db.prepare("INSERT INTO publications(id,post_id,channel_id,status,version) VALUES(?,?,?,'sent',1)").run(randomUUID(),f.id,channel);
+ f.store.audit(f.actor.id,'post.schedule-result',f.id,{state:'failed',version:1,message:'original failure'});
+ const receipts=f.store.db.prepare('SELECT * FROM publications ORDER BY id').all(),post=f.read();
+ const {scheduler}=f.services();assert.equal(f.job().state,'completed');assert.match(f.job().message,/تایید/);assert.deepEqual(f.read(),post);assert.deepEqual(f.store.db.prepare('SELECT * FROM publications ORDER BY id').all(),receipts);
+ await scheduler.runDue();assert.equal(f.sends,0);assert.equal(f.store.db.prepare("SELECT count(*) n FROM audit WHERE action='post.schedule-resolved'").get().n,1);assert.match(f.store.db.prepare("SELECT detail FROM audit WHERE action='post.schedule-result'").get().detail,/original failure/);
+ f.services();assert.equal(f.store.db.prepare("SELECT count(*) n FROM audit WHERE action='post.schedule-resolved'").get().n,1);
+});
+
+test('schedule reconciliation never hides missing, unknown, stale-version or actively running sends',t=>{
+ const f=fixture(t);f.queue();f.store.db.prepare("UPDATE scheduled_publications SET state='failed'").run();f.store.db.prepare("UPDATE posts SET status='published'").run();
+ const reconcile=()=>reconcileScheduledResult(f.store,f.id,1);
+ assert.equal(reconcile(),false);
+ for(const channel of ['telegram','eitaa'])f.store.db.prepare("INSERT INTO publications(id,post_id,channel_id,status,version) VALUES(?,?,?,'sent',1)").run(randomUUID(),f.id,channel);
+ assert.equal(reconcile(),false); // An unrelated receipt cannot substitute for the missing Bale receipt.
+ const bale=randomUUID();f.store.db.prepare("INSERT INTO publications(id,post_id,channel_id,status,version) VALUES(?,?,?,'unknown',1)").run(bale,f.id,'bale');assert.equal(reconcile(),false);
+ f.store.db.prepare("UPDATE publications SET status='sent' WHERE id=?").run(bale);
+ f.store.db.prepare('UPDATE posts SET version=2').run();assert.equal(reconcile(),false);f.store.db.prepare('UPDATE posts SET version=1').run();
+ f.store.db.prepare("UPDATE posts SET status='partial'").run();assert.equal(reconcile(),false);f.store.db.prepare("UPDATE posts SET status='published'").run();
+ for(const state of ['queued','running','cancelled']){f.store.db.prepare('UPDATE scheduled_publications SET state=?').run(state);assert.equal(reconcile(),false);assert.equal(f.job().state,state);}
+ f.store.db.prepare("UPDATE scheduled_publications SET state='failed'").run();assert.equal(reconcile(),true);assert.equal(reconcile(),false);
+});
+
+test('manual confirmation of the final unknown destination clears the old warning without resending',async t=>{
+ const f=fixture(t);f.queue();f.store.db.prepare("UPDATE scheduled_publications SET state='failed'").run();
+ const {publisher}=f.services({request:async url=>{if(url.includes('bale')&&url.endsWith('/sendMessage'))throw Object.assign(Error('lost receipt'),{code:'ETIMEDOUT'});return {status:200,data:{ok:true,result:url.endsWith('/getChat')?{id:-100123,type:'channel'}:{message_id:1}}};}});
+ await publisher.publish(f.id,1,f.actor.id);assert.equal(f.job().state,'failed');const report=publisher.report(f.read()),row=report.results.find(row=>row.channel_id==='bale');assert.equal(row.status,'unknown');
+ const before=f.store.db.prepare('SELECT count(*) n FROM audit WHERE action=\'post.publish-attempt\'').get().n;
+ publisher.resolve(f.id,{version:1,channel_id:'bale',decision:'observed_sent',confirmed:true,updated_at:row.updated_at,revision:row.revision},f.actor.id);
+ assert.equal(f.read().status,'published');assert.equal(f.job().state,'completed');assert.equal(f.store.db.prepare('SELECT count(*) n FROM audit WHERE action=\'post.publish-attempt\'').get().n,before);
+});
 
 test('future queue persists over restart, runs at due time once across concurrent ticks and preserves exact content',async t=>{
  const f=fixture(t);assert.equal(f.queue().automatic,true);f.restart();const {scheduler}=f.services();

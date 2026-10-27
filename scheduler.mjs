@@ -9,6 +9,20 @@ export function cancelScheduled(store,id){
  store.db.prepare("UPDATE scheduled_publications SET state='cancelled',message='',updated_at=? WHERE post_id=? AND state='queued'").run(new Date().toISOString(),id);
 }
 
+// A recovered send supersedes its old scheduling warning, not its audit history.
+export function reconcileScheduledResult(store,id,version,{clock=Date.now}={}){
+ const message='ارسال همه مقصدها تکمیل و تایید شد',updated=new Date(clock()).toISOString();
+ const job=store.db.prepare(`UPDATE scheduled_publications SET state='completed',message=?,updated_at=?
+  WHERE post_id=? AND version=? AND state='failed' AND EXISTS(
+   SELECT 1 FROM posts p WHERE p.id=scheduled_publications.post_id AND p.version=scheduled_publications.version AND p.status='published' AND json_array_length(p.channels)>0
+   AND NOT EXISTS(SELECT 1 FROM json_each(p.channels) c WHERE NOT EXISTS(
+    SELECT 1 FROM publications r WHERE r.post_id=p.id AND r.version=p.version AND r.channel_id=c.value AND r.status='sent'
+   ))
+  ) RETURNING actor_id`).get(message,updated,id,version);
+ if(job)store.audit(job.actor_id,'post.schedule-resolved',id,{version,state:'completed',previousState:'failed',message});
+ return !!job;
+}
+
 // Only a new, explicit queue approval creates a job; legacy ready posts stay manual.
 export function queuePublication(store,post,actor,version,{clock=Date.now}={}){
  check(['admin','publisher'].includes(actor.role),'دسترسی ارسال به صف را ندارید',403);
@@ -37,6 +51,7 @@ export function queuePublication(store,post,actor,version,{clock=Date.now}={}){
 export function createScheduler(store,publisher,{resolveActor,clock=Date.now,recoverInterrupted=true}={}){
  const db=store.db;let busy=null,stopped=false;
  if(recoverInterrupted)db.prepare("UPDATE scheduled_publications SET state='failed',message=?,updated_at=? WHERE state='running'").run('ارسال با توقف برنامه قطع شد، نتیجه کانال ها را بررسی کنید ارسال خودکار تکرار نمیشود',new Date(clock()).toISOString());
+ if(recoverInterrupted)store.transaction(()=>{for(const job of db.prepare("SELECT post_id,version FROM scheduled_publications WHERE state='failed'").all())reconcileScheduledResult(store,job.post_id,job.version,{clock});});
  function finish(job,state,message){
   db.prepare('UPDATE scheduled_publications SET state=?,message=?,updated_at=? WHERE post_id=? AND run_id=? AND state=\'running\'').run(state,message,new Date(clock()).toISOString(),job.post_id,job.run_id);
   store.audit(job.actor_id,'post.schedule-result',job.post_id,{state,message,version:job.version});
