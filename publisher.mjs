@@ -5,7 +5,7 @@ import {check} from './content.mjs';
 import {validateReady} from './delivery.mjs';
 import {publicPost} from './store.mjs';
 import {libraryState} from './public/post-library.js';
-import {cancelScheduled} from './scheduler.mjs';
+import {cancelScheduled,reconcileScheduledResult} from './scheduler.mjs';
 import {publicationMedia} from './public/media.js';
 import {requestJson} from './network.mjs';
 import {resolveNetworkRoute} from './system-network.mjs';
@@ -27,6 +27,7 @@ export function createPublisher(store,{request=requestJson,resolveRoute=resolveN
  function updateStatus(post){
   const results=receipts(post),sent=results.filter(r=>r.status==='sent').length,unknown=results.some(r=>r.status==='unknown'),status=sent===post.channels.length?'published':sent?'partial':unknown?'uncertain':'draft';
   db.prepare('UPDATE posts SET status=?,updated_at=? WHERE id=? AND version=?').run(status,timestamp(),post.id,post.version);
+  if(status==='published')reconcileScheduledResult(store,post.id,post.version);
   return {post:getPost(post.id),results,sent,total:post.channels.length};
  }
  function report(post){

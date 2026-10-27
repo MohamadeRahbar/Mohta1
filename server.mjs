@@ -1,3 +1,4 @@
+import {contentSecurityPolicy} from './security-headers.mjs';
 import {requireDestination,createDestination,removeDestination} from './destinations.mjs';
 import {createAccountRouter} from './account-http.mjs';
 import {identifier} from './accounts.mjs';
@@ -25,7 +26,7 @@ import {publicationMedia} from './public/media.js';
 import {streamMedia} from './media-stream.mjs';
 import {createChatGPTService} from './chatgpt.mjs';
 import {changePostLibrary} from './post-library.mjs';
-import {libraryState,librarySummary} from './public/post-library.js';
+import {libraryState,librarySummary,copyLibraryTitle} from './public/post-library.js';
 import {createScheduler,queuePublication,cancelScheduled} from './scheduler.mjs';
 import {contentCalendar} from './content-calendar.mjs';
 import {validTimeZone,timeZone} from './public/time-zone.js';
@@ -68,8 +69,34 @@ function dateValue(value){if(!value)return null;const normalized=text(value,50);
 function publicationSelection(data,media){
  const ids=publicationMedia({...data,media});check(!media.length||ids.length,'دست‌کم یک تصویر یا کلیپ را برای پست انتخاب کنید.');return ids;
 }
+function copyPosts(items,channels,user,{snapshot=false}={}){
+ check(Array.isArray(items)&&items.length>0&&items.length<=1000,'بین ۱ تا ۱۰۰۰ محتوا انتخاب کنید');
+ check(items.every(item=>item&&typeof item.id==='string'&&Number.isSafeInteger(item.version)),'مشخصات انتخاب محتوا معتبر نیست');
+ check(new Set(items.map(item=>item.id)).size===items.length,'محتوای تکراری در انتخاب وجود دارد');
+ return store.transaction(()=>{
+  const originals=items.map(item=>{
+   const previous=findPost(item.id,user);
+   check(libraryState(previous)!=='deleted','ابتدا محتوا را از زباله دان برگردانید');
+   check(previous.status!=='publishing'&&!store.db.prepare("SELECT 1 FROM publications WHERE post_id=? AND status='sending'").get(previous.id),'ارسال یکی از محتواها در حال انجام است؛ پس از پایان ارسال دوباره اقدام کنید',409);
+   check(item.version===previous.version,'نسخهٔ محتوا تغییر کرده است؛ صفحه را تازه کنید.',409);
+   if(snapshot)check(item.library_revision===previous.library_revision&&item.control_revision===previous.control_revision&&(item.library_title??null)===(previous.library_title??null),'نام یا وضعیت یکی از محتواها تغییر کرده است؛ صفحه را تازه کنید',409);
+   for(const id of [...previous.media,...(previous.remote_media||[])])check(store.db.prepare('SELECT id FROM media WHERE id=?').get(id),'یکی از فایل‌های اصلی در دسترس نیست.');
+   return previous;
+  });
+  const timestamp=now();
+  return originals.map(previous=>{
+     const post={...previous,library_title:copyLibraryTitle(previous),id:randomUUID(),body:previous.remote_body??previous.body,body_entities:previous.remote_entities??previous.body_entities,media:[...new Set([...previous.media,...(previous.remote_media||[])])],publication_media_ids:previous.remote_media||previous.publication_media_ids,primary_media_id:(previous.remote_media||previous.publication_media_ids)[0]||null,publish_options:{},control_revision:0,remote_body:null,remote_entities:null,remote_media:null,channels,scheduled_at:null,status:'draft',version:1,archived_at:null,deleted_at:null,library_revision:0,author_id:user.id,created_at:timestamp,updated_at:timestamp};
+     if(previous.remote_body!=null){post.body_mode='manual';post.body_source=null;if(post.type==='free')post.fields={...post.fields,description:post.body,description_entities:post.body_entities};}
+     store.db.prepare('INSERT INTO posts(id,type,title,library_title,fields,body,body_entities,channels,media,primary_media_id,publication_media_ids,scheduled_at,expires_at,status,version,author_id,created_at,updated_at,body_mode,body_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(post.id,post.type,post.title,post.library_title??null,JSON.stringify(post.fields),post.body,JSON.stringify(post.body_entities),JSON.stringify(channels),JSON.stringify(post.media),post.primary_media_id,JSON.stringify(post.publication_media_ids),null,post.expires_at,post.status,post.version,user.id,timestamp,timestamp,post.body_mode,post.body_source);recordRevision(post,user.id,null);store.audit(user.id,'post.copy',post.id,{sourceId:previous.id,sourceVersion:previous.version,channels});
+   return post;
+  });
+ });
+}
 function connectionState(channel){const issue=channelSetupIssue(channel,store.secret('token:'+channel.id));return issue?{network_status:'not_configured',network_detail:issue}:{};}
-function postSnapshot(post,user){return {...post,schedule:store.db.prepare('SELECT state,run_at,message FROM scheduled_publications WHERE post_id=? AND version=?').get(post.id,post.version)||null,publications:publishingService.receipts(post).filter(r=>user.role==='admin'||JSON.parse(user.channels).includes(r.channel_id)),delivery:postDelivery(post),deliveries:Object.fromEntries(post.channels.map(id=>[id,postDelivery(post,id)])),media_request:null};}
+function postPublishers(post,user){
+ return store.db.prepare("SELECT u.name FROM audit a JOIN users u ON u.id=a.actor_id WHERE a.entity_id=? AND a.action='post.publish-result' AND json_extract(a.detail,'$.version')=? AND json_extract(a.detail,'$.status')='sent' AND EXISTS(SELECT 1 FROM publications r WHERE r.post_id=a.entity_id AND r.version=json_extract(a.detail,'$.version') AND r.channel_id=json_extract(a.detail,'$.channel') AND r.status='sent') AND (?='admin' OR EXISTS(SELECT 1 FROM json_each(?) allowed WHERE allowed.value=json_extract(a.detail,'$.channel'))) GROUP BY u.id,u.name ORDER BY min(a.id)").all(post.id,post.version,user.role,user.channels).map(row=>row.name);
+}
+function postSnapshot(post,user){return {...post,publisher_names:postPublishers(post,user),schedule:store.db.prepare('SELECT state,run_at,message FROM scheduled_publications WHERE post_id=? AND version=?').get(post.id,post.version)||null,publications:publishingService.receipts(post).filter(r=>user.role==='admin'||JSON.parse(user.channels).includes(r.channel_id)),delivery:postDelivery(post),deliveries:Object.fromEntries(post.channels.map(id=>[id,postDelivery(post,id)])),media_request:null};}
 function snapshot(user){
  const settings=store.settings();
  const totals=librarySummary(store.db.prepare('SELECT type,status,archived_at,deleted_at,author_id,channels FROM posts').all().map(row=>({...row,channels:JSON.parse(row.channels)})).filter(row=>visible(row,user)));
@@ -79,7 +106,7 @@ function snapshot(user){
  const audit=store.db.prepare('SELECT a.*,u.name AS actor_name FROM audit a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.id DESC LIMIT 80').all().filter(a=>user.role==='admin'||a.actor_id===user.id).map(a=>({...a,detail:JSON.parse(a.detail)}));
  const visibleMedia=new Set([...posts.flatMap(post=>[...post.media,...(post.remote_media||[]),...store.db.prepare('SELECT remote_media FROM publications WHERE post_id=?').all(post.id).flatMap(row=>JSON.parse(row.remote_media||'[]'))]),settings.brandLogoId].filter(Boolean));
  const mediaMap=Object.fromEntries(store.db.prepare('SELECT id,name,mime,size,owner_id FROM media').all().filter(m=>user.role==='admin'||m.owner_id===user.id||visibleMedia.has(m.id)).map(m=>[m.id,{id:m.id,name:m.name,mime:m.mime,size:m.size}]));
- const publicationCount=store.db.prepare("SELECT channel_id FROM publications WHERE status='sent'").all().filter(p=>user.role==='admin'||JSON.parse(user.channels).includes(p.channel_id)).length;
+ const publicationCount=store.db.prepare("SELECT count(DISTINCT p.id) AS total FROM posts p JOIN publications r ON r.post_id=p.id WHERE p.deleted_at IS NULL AND r.status='sent' AND r.remote_deleted_at IS NULL AND (?='admin' OR EXISTS(SELECT 1 FROM json_each(?) allowed WHERE allowed.value=r.channel_id))").get(user.role,user.channels).total;
  return {...accountRouter.accountInfo(workspaces.accounts.user(user.account_id)),workspace:{id:workspace.id,name:workspaces.get(workspace.id).row.name},workspaces:workspaces.list(workspace.id,user),user:publicUser(user),csrf:user.csrf,settings,channels,destinationMap:Object.fromEntries(destinations.filter(c=>user.role==='admin'||JSON.parse(user.channels).includes(c.id)).map(c=>[c.id,{id:c.id,name:c.name,platform:c.platform,deleted:!!c.deleted_at}])),posts,librarySummary:totals,postsTruncated:totals.active+totals.archived+totals.deleted>posts.length,mediaMap,audit,copyDefaults:{cta:defaultCta},phase:'publishing',ai:chatgpt.status(user.id),capabilities:{workspaces:true,canCreateBrands:!!workspaces.accounts.user(user.account_id).can_create_brands,projectName:false,scheduledPublish:true,instantPublish:true,sendPlatforms,telegramAccessCheck:true,channelAccessCheck:true,structuredContacts:true,chatgptConnect:host==='127.0.0.1'&&!publicUrl},publicationCount};
 }
 
@@ -119,6 +146,10 @@ async function route(req,res,url,auth){
      const mediaRequest=generationRequest(data.media_request,media),publicationIds=publicationSelection(data,media);const document=prepareDocument(data,title,fields,store.settings());check(document.body||publicationIds.length,'متن پیام یا یک رسانه را وارد کنید.');const timestamp=now();const post={id:randomUUID(),type:data.type,title,fields,publish_options:publishOptions(data.publish_options),body:document.body,body_entities:document.entities,channels,media,primary_media_id:publicationIds[0]||null,publication_media_ids:publicationIds,scheduled_at:dateValue(data.scheduled_at),expires_at:dateValue(data.expires_at),...composerMetadata(data),status:'draft',version:1,author_id:user.id,created_at:timestamp,updated_at:timestamp};
      store.transaction(()=>{store.db.prepare('INSERT INTO posts(id,type,title,fields,body,channels,media,scheduled_at,expires_at,status,version,author_id,created_at,updated_at,primary_media_id,publication_media_ids,body_entities,body_mode,body_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(post.id,post.type,post.title,JSON.stringify(fields),post.body,JSON.stringify(channels),JSON.stringify(media),post.scheduled_at,post.expires_at,post.status,post.version,user.id,timestamp,timestamp,post.primary_media_id,JSON.stringify(post.publication_media_ids),JSON.stringify(post.body_entities),post.body_mode,post.body_source);saveGeneration(post,mediaRequest);recordRevision(post,user.id,mediaRequest);store.audit(user.id,'post.create',post.id,{title,type:post.type});});json(res,{post},201);return;
    }
+   if(req.method==='POST'&&url.pathname==='/api/posts/copies'){
+     writing(user);const data=await body(req),channels=selectedChannels(data.channels,user);
+     const posts=copyPosts(data.posts,channels,user,{snapshot:true});json(res,{posts,count:posts.length},201);return;
+   }
    if(req.method==='POST'&&url.pathname==='/api/posts/library-actions'){
      writing(user);const data=await body(req);json(res,changePostLibrary(store,user,data.action,data.posts));return;
    }
@@ -132,13 +163,8 @@ async function route(req,res,url,auth){
    }
    match=url.pathname.match(/^\/api\/posts\/([a-f0-9-]+)\/copy$/);
    if(req.method==='POST'&&match){
-     writing(user);const data=await body(req),previous=findPost(match[1],user);check(libraryState(previous)==='active','ابتدا محتوا را به کتابخانه برگردانید');check(data.version===previous.version,'نسخهٔ محتوا تغییر کرده است؛ صفحه را تازه کنید.',409);
-     const channels=selectedChannels(data.channels,user),timestamp=now();
-     for(const id of previous.media)check(store.db.prepare('SELECT id FROM media WHERE id=?').get(id),'یکی از فایل‌های اصلی در دسترس نیست.');
-     const post={...previous,id:randomUUID(),body:previous.remote_body??previous.body,body_entities:previous.remote_entities??previous.body_entities,media:[...new Set([...previous.media,...(previous.remote_media||[])])],publication_media_ids:previous.remote_media||previous.publication_media_ids,primary_media_id:(previous.remote_media||previous.publication_media_ids)[0]||null,publish_options:{},control_revision:0,remote_body:null,remote_entities:null,remote_media:null,channels,scheduled_at:null,status:'draft',version:1,archived_at:null,deleted_at:null,library_revision:0,author_id:user.id,created_at:timestamp,updated_at:timestamp};
-     if(previous.remote_body!=null){post.body_mode='manual';post.body_source=null;if(post.type==='free')post.fields={...post.fields,description:post.body,description_entities:post.body_entities};}
-     store.transaction(()=>{store.db.prepare('INSERT INTO posts(id,type,title,library_title,fields,body,body_entities,channels,media,primary_media_id,publication_media_ids,scheduled_at,expires_at,status,version,author_id,created_at,updated_at,body_mode,body_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(post.id,post.type,post.title,post.library_title??null,JSON.stringify(post.fields),post.body,JSON.stringify(post.body_entities),JSON.stringify(channels),JSON.stringify(post.media),post.primary_media_id,JSON.stringify(post.publication_media_ids),null,post.expires_at,post.status,post.version,user.id,timestamp,timestamp,post.body_mode,post.body_source);recordRevision(post,user.id,null);store.audit(user.id,'post.copy',post.id,{sourceId:previous.id,sourceVersion:previous.version,channels});});
-     json(res,{post},201);return;
+     writing(user);const data=await body(req),channels=selectedChannels(data.channels,user);
+     const [post]=copyPosts([{id:match[1],version:data.version}],channels,user);json(res,{post},201);return;
    }
    match=url.pathname.match(/^\/api\/posts\/([a-f0-9-]+)$/);
    if(req.method==='GET'&&match){
@@ -149,7 +175,7 @@ async function route(req,res,url,auth){
      const data=await body(req),previous=findPost(match[1],user);editAllowed(previous,user);check(data.version===previous.version,'این محتوا توسط شخص دیگری تغییر کرده است؛ صفحه را تازه‌سازی کنید.',409);
      const fields=validateFields(data.type,data.fields);const title=postTitle(data.type,data.title,fields);const channels=selectedChannels(data.channels,user,true);const media=Array.isArray(data.media)?[...new Set(data.media)]:[];check(media.length<=8,'حداکثر ۸ فایل انتخاب کنید.');
      for(const id of media)check(previous.media.includes(id)||store.db.prepare('SELECT id FROM media WHERE id=? AND owner_id=?').get(id,user.id),'فایل در دسترس نیست.',403);
-     const mediaRequest=generationRequest(data.media_request,media),publicationIds=publicationSelection(data,media);const document=prepareDocument(data,title,fields,store.settings(),previous.title);check(document.body||publicationIds.length,'متن پیام یا یک رسانه را وارد کنید.');const post={...previous,type:data.type,title,library_title:data.type==='free'?title:previous.library_title,fields,channels,media,primary_media_id:publicationIds[0]||null,publication_media_ids:publicationIds,body:document.body,body_entities:document.entities,...composerMetadata(data,previous),publish_options:publishOptions(data.publish_options??previous.publish_options),scheduled_at:dateValue(data.scheduled_at),expires_at:dateValue(data.expires_at),status:'draft',version:previous.version+1,updated_at:now()};
+     const mediaRequest=generationRequest(data.media_request,media),publicationIds=publicationSelection(data,media);const document=prepareDocument(data,title,fields,store.settings(),previous.title);check(document.body||publicationIds.length,'متن پیام یا یک رسانه را وارد کنید.');const libraryTitle=data.type==='free'?title:data.library_title===undefined?previous.library_title:text(data.library_title||'',240)||null;check(!libraryTitle||!/[\r\n]/.test(libraryTitle),'نام داخلی را در یک خط وارد کنید.');const post={...previous,type:data.type,title,library_title:libraryTitle,fields,channels,media,primary_media_id:publicationIds[0]||null,publication_media_ids:publicationIds,body:document.body,body_entities:document.entities,...composerMetadata(data,previous),publish_options:publishOptions(data.publish_options??previous.publish_options),scheduled_at:dateValue(data.scheduled_at),expires_at:dateValue(data.expires_at),status:'draft',version:previous.version+1,updated_at:now()};
      store.transaction(()=>{const result=store.db.prepare(`UPDATE posts SET type=?,title=?,library_title=?,fields=?,body=?,body_entities=?,body_mode=?,body_source=?,channels=?,media=?,primary_media_id=?,publication_media_ids=?,scheduled_at=?,expires_at=?,status=?,version=?,updated_at=? WHERE id=? AND version=? AND status IN ('draft','ready') AND archived_at IS NULL AND deleted_at IS NULL`).run(post.type,title,post.library_title??null,JSON.stringify(fields),post.body,JSON.stringify(post.body_entities),post.body_mode,post.body_source,JSON.stringify(channels),JSON.stringify(media),post.primary_media_id,JSON.stringify(post.publication_media_ids),post.scheduled_at,post.expires_at,'draft',post.version,post.updated_at,post.id,previous.version);check(result.changes===1,'نسخهٔ محتوا تغییر کرده است.',409);cancelScheduled(store,post.id);saveGeneration(post,mediaRequest);recordRevision(post,user.id,mediaRequest);store.audit(user.id,'post.update',post.id,{version:post.version});});json(res,{post});return;
    }
    match=url.pathname.match(/^\/api\/posts\/([a-f0-9-]+)\/controls$/);
@@ -244,7 +270,7 @@ return {route,scheduler,tracking};
 const workspaces=createWorkspaces(path.resolve(process.env.DATA_DIR||path.join(root,'data')),createWorkspaceRuntime);
 const accountRouter=createAccountRouter(workspaces,{host,publicUrl,limited});
 const server=http.createServer(async(req,res)=>{
- res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+ res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');res.setHeader('Content-Security-Policy',contentSecurityPolicy({host,publicUrl}));
  try{
    check(allowedHosts.has(req.headers.host||''),'نام میزبان مجاز نیست.',403);
    if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.headers.origin){const ownOrigin=`http${process.env.COOKIE_SECURE==='true'?'s':''}://${req.headers.host}`;check(req.headers.origin===ownOrigin||req.headers.origin===publicUrl?.origin,'مبدأ درخواست مجاز نیست.',403);}
