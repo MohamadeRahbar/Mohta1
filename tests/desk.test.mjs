@@ -122,6 +122,26 @@ test('authenticated content desk lifecycle',async t=>{
    assert.equal((await viewer.call('/api/text-assist/prompt','POST',{target:'title'})).status,403);
    const help=await editor.call('/api/text-assist/prompt','POST',{target:'title',type:'stock',fields:{brand:'Cisco',model:'A'},instructions:'عنوان کوتاه'});assert.equal(help.status,200);assert.equal(help.value.mode,'manual_chatgpt');assert(help.value.prompt.includes('عنوان کوتاه'));
  });
+ await t.test('delivery investigation enforces destination grants, CSRF, explicit consent and stale-report protection',async()=>{
+   const created=(await owner.call('/api/posts','POST',{...data,channels:['telegram','bale']})).value.post;
+   const db=new DatabaseSync(path.join(dataDir,'desk.sqlite')),at=new Date().toISOString();
+   for(const channel of ['telegram','bale'])db.prepare("INSERT INTO publications(id,post_id,channel_id,version,status,message_ids,updated_at,error_code) VALUES(?,?,?,1,'unknown','[]',?,'connection_failed')").run(created.id+':1:'+channel,created.id,channel,at);
+   db.prepare("UPDATE posts SET status='uncertain' WHERE id=?").run(created.id);db.close();
+   const route='/api/posts/'+created.id+'/delivery-report',report=(await owner.call(route)).value,row=report.results.find(r=>r.channel_id==='bale');assert.equal(report.results.length,2);
+   const limited=(await viewer.call(route)).value;assert.deepEqual(limited.results.map(r=>r.channel_id),['bale']);assert.equal(limited.total,1);
+   const resolution={version:1,channel_id:'bale',decision:'observed_absent',confirmed:true,updated_at:row.updated_at,revision:row.revision};
+   assert.equal((await viewer.call(route,'POST',resolution)).status,403);assert.equal((await editor.call(route,'POST',resolution)).status,403);
+   assert.equal((await owner.call(route,'POST',resolution,{'X-CSRF-Token':''})).status,403);
+   await owner.call('/api/users','POST',{username:'reportpublisher',role:'publisher',name:'report publisher',password:'local-test-password',channels:['bale']});
+   const member=client();await member.call('/api/login','POST',{username:'reportpublisher',password:'local-test-password'});
+   assert.equal((await member.call(route,'POST',{...resolution,channel_id:'telegram'})).status,403);
+   assert.equal((await member.call('/api/posts/'+created.id+'/publish','POST',{version:1,destinations:['telegram']})).status,403);
+   const resolved=await member.call(route,'POST',resolution);assert.equal(resolved.status,200);assert.deepEqual(resolved.value.results.map(r=>r.channel_id),['bale']);assert.equal(resolved.value.results[0].status,'failed');
+   assert.equal((await member.call(route,'POST',resolution)).status,409);
+   // Token is absent: preflight blocks safely without contacting a provider.
+   const retry=await member.call('/api/posts/'+created.id+'/publish','POST',{version:1,destinations:['bale']});assert.equal(retry.status,200);assert.deepEqual(retry.value.results.map(r=>r.channel_id),['bale']);assert.equal(retry.value.results[0].status,'blocked');
+   assert.equal((await owner.call(route)).value.results.find(r=>r.channel_id==='telegram').status,'unknown');
+ });
  await t.test('secrets are encrypted and absent from snapshots',async()=>{
    const secret='test-token-not-real';assert.equal((await owner.call('/api/channels/telegram','PUT',{name:'تلگرام',target:'test',route:'proxy',enabled:true,token:secret,proxy:'http://localhost:8090'})).status,200);
    const state=(await owner.call('/api/state')).value;assert.equal(state.channels.find(c=>c.id==='telegram').tokenConfigured,true);assert(!JSON.stringify(state).includes(secret));

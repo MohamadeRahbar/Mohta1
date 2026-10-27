@@ -155,11 +155,25 @@ async function route(req,res,url,auth){
    match=url.pathname.match(/^\/api\/posts\/([a-f0-9-]+)\/controls$/);
    if(match&&req.method==='GET'){const post=findPost(match[1],user);json(res,{...messageControls.snapshot(post,user),analytics:tracking.stats(post.id,user)});return;}
    if(match&&req.method==='POST'){publishing(user);const post=findPost(match[1],user),data=await body(req);json(res,{...await messageControls.run(post.id,data,user),analytics:tracking.stats(post.id,user)});return;}
+   match=url.pathname.match(/^\/api\/posts\/([a-f0-9-]+)\/delivery-report$/);
+   if(match&&['GET','POST'].includes(req.method)){
+     const post=findPost(match[1],user);let report;
+     if(req.method==='POST'){
+       publishing(user);const data=await body(req);selectedChannels([data.channel_id],user,false,true);
+       check(post.channels.includes(data.channel_id),'مقصد متعلق به این محتوا نیست.',403);
+       report=publishingService.resolve(post.id,data,user.id);
+     }else report=publishingService.report(post);
+     report.results=report.results.filter(row=>user.role==='admin'||JSON.parse(user.channels).includes(row.channel_id));
+     report.sent=report.results.filter(row=>row.status==='sent').length;report.total=post.channels.filter(id=>user.role==='admin'||JSON.parse(user.channels).includes(id)).length;
+     json(res,report);return;
+   }
    match=url.pathname.match(/^\/api\/posts\/([a-f0-9-]+)\/publish$/);
    if(req.method==='POST'&&match){
-     publishing(user);const data=await body(req),post=findPost(match[1],user);selectedChannels(post.channels,user,false,true);
+     publishing(user);const data=await body(req),post=findPost(match[1],user);const destinations=selectedChannels(data.destinations===undefined?post.channels:data.destinations,user,false,true);
      check(Number.isSafeInteger(data.version),'نسخهٔ محتوا معتبر نیست.');
-     json(res,await publishingService.publish(post.id,data.version,user.id));return;
+     const result=await publishingService.publish(post.id,data.version,user.id,{channelIds:destinations});
+     result.results=result.results.filter(row=>user.role==='admin'||JSON.parse(user.channels).includes(row.channel_id));result.sent=result.results.filter(row=>row.status==='sent').length;result.total=post.channels.filter(id=>user.role==='admin'||JSON.parse(user.channels).includes(id)).length;
+     json(res,result);return;
    }
    match=url.pathname.match(/^\/api\/posts\/([a-f0-9-]+)\/(ready|draft|archive)$/);
    if(req.method==='POST'&&match){
@@ -217,6 +231,7 @@ async function route(req,res,url,auth){
  assets['/logos/bale.png']='logos/bale.png';assets['/logos/rubika.ico']='logos/rubika.ico';
  assets['/post-library.js']='post-library.js';
  assets['/message-controls-ui.js']='message-controls-ui.js';
+ assets['/publication-report-ui.js']='publication-report-ui.js';
  assets['/rubika-format.js']='rubika-format.js';
  assets['/persian-date-picker.js']='persian-date-picker.js';
  assets['/channel-selection.js']='channel-selection.js';

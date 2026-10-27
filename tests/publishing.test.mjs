@@ -21,6 +21,41 @@ function fixture(t,channels=['telegram']){
  t.after(()=>{store.close();fs.rmSync(directory,{recursive:true,force:true});});return {store,post,actor};
 }
 const telegramSuccess=async(url,options)=>url.endsWith('/getChat')?{status:200,data:{ok:true,result:{id:-100123,type:'channel'}}}:{status:200,data:{ok:true,result:{message_id:123}}};
+test('four destinations: explicit unknown resolution enables repeatable selective retries without duplicate successes',async t=>{
+ const {store,post,actor}=fixture(t,['telegram','bale','rubika','eitaa']);let eitaaFail=true;const sends=[];
+ const service=createPublisher(store,{resolveRoute:route,request:async url=>{
+  const platform=url.includes('rubika')?'rubika':url.includes('bale')?'bale':url.includes('eitaayar')?'eitaa':'telegram';
+  if(url.endsWith('/getMe'))return {status:200,data:{ok:true,result:{id:123}}};
+  if(url.endsWith('/getChat'))return platform==='rubika'?{status:200,data:{status:'OK',data:{chat:{chat_type:'Channel',chat_id:'c0fixturechannel'}}}}:telegramSuccess(url);
+  sends.push(platform);if(platform==='telegram'||platform==='eitaa'&&eitaaFail)throw Object.assign(new Error(token),{code:'ETIMEDOUT'});
+  return {status:200,data:platform==='rubika'?{status:'OK',data:{message_id:'123'}}:{ok:true,result:{message_id:123}}};
+ }});
+ let result=await service.publish(post.id,1,actor);assert.equal(result.sent,2);
+ const inspect=()=>service.report({...post,status:store.db.prepare('SELECT status FROM posts WHERE id=?').get(post.id).status});
+ const decision=(channel_id,decision)=>{const row=inspect().results.find(row=>row.channel_id===channel_id);return {version:1,channel_id,decision,confirmed:true,updated_at:row.updated_at,revision:row.revision};};
+ const telegramDecision=decision('telegram','observed_sent');let report=service.resolve(post.id,telegramDecision,actor);
+ const telegram=report.results.find(r=>r.channel_id==='telegram');assert.equal(telegram.confirmation,'manual');assert.deepEqual(telegram.message_ids,[]);assert.equal(telegram.published_at,null);assert.throws(()=>service.resolve(post.id,telegramDecision,actor),/تغییر/);
+ const absent=decision('eitaa','observed_absent');assert.throws(()=>service.resolve(post.id,{...absent,confirmed:false},actor),/تایید/);assert.throws(()=>service.resolve(post.id,{...absent,version:2},actor),/نسخه/);
+ service.resolve(post.id,absent,actor);
+ result=await service.publish(post.id,1,actor,{channelIds:['eitaa']});assert.equal(result.results.find(r=>r.channel_id==='eitaa').status,'unknown');
+ // A second timeout can be investigated and retried again, not permanently locked.
+ service.resolve(post.id,decision('eitaa','observed_absent'),actor);eitaaFail=false;
+ result=await service.publish(post.id,1,actor,{channelIds:['eitaa']});assert.equal(result.sent,4);assert.equal(result.post.status,'published');
+ assert.deepEqual([...sends.slice(0,4)].sort(),['bale','eitaa','rubika','telegram']);assert.deepEqual(sends.slice(4),['eitaa','eitaa']);
+ report=inspect();const history=report.results.find(r=>r.channel_id==='eitaa').history;
+ assert.equal(history.filter(h=>h.action==='post.publish-attempt').length,3);assert.equal(history.filter(h=>h.action==='post.publish-resolve').length,2);assert.equal(history.filter(h=>h.transport==='ETIMEDOUT').length,2);assert(history.every(h=>h.id&&h.at));assert(!JSON.stringify(report).includes(token));
+ const start=JSON.parse(store.db.prepare("SELECT detail FROM audit WHERE action='post.publish-start' ORDER BY id DESC LIMIT 1").get().detail);assert.deepEqual(start.channels,['eitaa']);
+ await service.publish(post.id,1,actor,{channelIds:['eitaa']});assert.equal(sends.length,6);
+ await assert.rejects(()=>service.publish(post.id,1,actor,{channelIds:['unrelated']}),/مقصد/);
+ await assert.rejects(()=>service.publish(post.id,1,actor,{channelIds:[]}),/مقصد/);
+});
+test('unknown resolution cannot race active publication or mutate archived content',async t=>{
+ const {store,post,actor}=fixture(t);const service=createPublisher(store,{resolveRoute:route,request:async url=>{if(url.endsWith('getChat'))return telegramSuccess(url);throw Error('lost');}});
+ await service.publish(post.id,1,actor);const row=service.report(post).results[0],data={version:1,channel_id:'telegram',decision:'observed_absent',confirmed:true,updated_at:row.updated_at,revision:row.revision};
+ store.db.prepare("UPDATE posts SET status='publishing' WHERE id=?").run(post.id);assert.throws(()=>service.resolve(post.id,data,actor),/حال ارسال/);
+ store.db.prepare("UPDATE posts SET status='partial',archived_at=? WHERE id=?").run(new Date().toISOString(),post.id);assert.throws(()=>service.resolve(post.id,data,actor),/بایگانی/);
+ assert.equal(service.receipts(post)[0].status,'unknown');
+});
 test('one click publishes each configured destination once; concurrent and repeated calls cannot duplicate',async t=>{
  const {store,post,actor}=fixture(t,['telegram','bale']);let sends=0,release;
  const wait=new Promise(resolve=>release=resolve);

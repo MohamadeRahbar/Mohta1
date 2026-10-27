@@ -57,12 +57,13 @@ export function adapterPreflight(post,channel,token,files,prepared){
 }
 export async function sendPost(post,channel,{token,files,request,resolveRoute,manualProxy,replyTo,pin=false,transformPayload}){
  const platform=channel.platform,prepared=transformPayload?transformPayload(delivery(post,platform)):null,payload=adapterPreflight(post,channel,token,files,prepared),base=bases[platform];let target=platform==='rubika'?channel.target:telegramTarget(channel.target);
- let sending=false;
+ let sending=false,stage='preflight';
  async function call(url,options,final=false){
+  stage=final?'send':options.bodyStream?'upload':'preflight';
   let route;try{route=await resolveRoute(channel,url,{manualProxy});}catch{throw refusal('route_invalid','مسیر شبکهٔ این پیام‌رسان قابل استفاده نیست.');}
   if(final)sending=true;
   let response;try{response=await request(url,{...options,proxy:route.proxy||'',timeout:files.length?90000:15000});}
-  catch{throw refusal('connection_failed',sending?'نتیجهٔ ارسال نامشخص است؛ پیش از هر اقدام، کانال را بررسی کنید.':'بررسی اتصال انجام نشد؛ تنظیمات شبکه یا دسترسی کانال را بررسی کنید.',sending);}
+  catch(cause){const error=refusal('connection_failed',sending?'نتیجهٔ ارسال نامشخص است؛ پیش از هر اقدام، کانال را بررسی کنید.':'بررسی اتصال انجام نشد؛ تنظیمات شبکه یا دسترسی کانال را بررسی کنید.',sending);error.stage=final?'send':options.bodyStream?'upload':'preflight';error.transport=['ETIMEDOUT','ECONNRESET','ECONNREFUSED','ENOTFOUND','EAI_AGAIN','EPIPE','ENETUNREACH','EHOSTUNREACH','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(cause?.code)?cause.code:null;throw error;}
   return response;
  }
  const endpoint=method=>base+(platform==='rubika'?'v3/':'bot')+token+'/'+method;
@@ -114,5 +115,5 @@ export async function sendPost(post,channel,{token,files,request,resolveRoute,ma
  const ids=messages.map(message=>message?.message_id).filter(id=>(typeof id==='string'&&id.length>0&&id.length<200)||(Number.isSafeInteger(id)&&id>0));
  if(ids.length!==(files.length||1))throw refusal('receipt_missing','تأیید کامل ارسال دریافت نشد؛ کانال را بررسی کنید. ارسال خودکار تکرار نمی‌شود.',true);
  return {messageIds:ids,target:String(chat?.id||chat?.chat_id||target)};
- }catch(error){if(!sending)error.deliveryUnknown=false;throw error;}
+ }catch(error){if(!sending)error.deliveryUnknown=false;error.stage=stage;throw error;}
 }
