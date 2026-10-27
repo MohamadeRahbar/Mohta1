@@ -1,7 +1,7 @@
 const codeField=()=>'<label class="field"><span>کد تایید ۶ رقمی</span><input name="code" dir="ltr" class="ltr" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></label>';
 export function verificationFields(challenge,esc){return `<p class="form-note">کد ارسال شده به <bdi>${esc(challenge.destination)}</bdi> را وارد کنید کد تا ۱۰ دقیقه معتبر است</p>${codeField()}`;}
 export function resendButton(challenge){return `<button type="button" class="auth-link" data-action="resend-code" ${Date.now()<Date.parse(challenge.resendAt)?'disabled':''}>ارسال دوباره کد</button>`;}
-export function authMarkup({mode,registration,username,challenge,resetForm}, {field,esc,icon}){
+export function authMarkup({mode,registration,username,challenge,resetForm,remembered}, {field,esc,icon}){
  let title='ورود به محتوان',content='';
  const back='<button type="button" class="auth-link" data-action="back-login">بازگشت</button>';
  if(mode==='register'){
@@ -14,8 +14,10 @@ export function authMarkup({mode,registration,username,challenge,resetForm}, {fi
   content+='<button type="button" class="auth-link" data-action="host-recovery">لینک بازیابی میزبان دارم</button>'+back;
  }else if(mode==='recover'&&challenge){title='تعیین رمز جدید';content=`<form id="recover-form">${verificationFields(challenge,esc)}${field('password','رمز جدید','',{type:'password',required:true,hint:'حداقل ۱۲ کاراکتر'})}${field('confirmation','تکرار رمز جدید','',{type:'password',required:true})}<div data-form-error></div><button class="button" type="submit">ذخیره رمز جدید</button></form>${resendButton(challenge)}${back}`;
  }else if(mode==='reset'){title='تعیین رمز جدید';content=resetForm;
+ }else if(mode==='login'&&remembered){
+  content=`<form id="remembered-login-form"><div class="remembered-account"><strong>${esc(remembered.name)}</strong><bdi>${esc(remembered.username)}</bdi><p>حساب شما در این مرورگر ذخیره است؛ برای ورود دوباره کلیک کنید.</p></div><div data-form-error></div><button type="submit" class="button">ورود به پنل ${icon('arrow')}</button></form><button type="button" class="auth-link" data-action="password-login">ورود با رمز یا حساب دیگر</button><button type="button" class="auth-link" data-action="forget-login">فراموش کردن حساب ذخیره شده</button>`;
  }else{
-  content=`<form id="auth-form">${field('username','نام کاربری، ایمیل یا موبایل',username,{required:true,ltr:true,autocomplete:'username'})}${field('password','رمز عبور','',{type:'password',required:true,autocomplete:'current-password'})}<div id="auth-error"></div><button class="button" type="submit">ورود به پنل ${icon('arrow')}</button></form><button type="button" class="auth-link" data-action="forgot">رمز عبور را فراموش کرده ام</button>${registration.registrationEnabled?'<button type="button" class="auth-link" data-action="register">ساخت حساب جدید</button>':'<p class="help">ثبت نام جدید تا تنظیم سرویس تایید در سرور فعال نیست</p>'}`;
+  content=`<form id="auth-form">${field('username','نام کاربری، ایمیل یا موبایل',username||remembered?.username||'',{required:true,ltr:true,autocomplete:'username'})}${field('password','رمز عبور','',{type:'password',required:true,autocomplete:'current-password'})}<label class="check-row remember-login"><input type="checkbox" name="remember">مرا به خاطر بسپار <small>در همین مرورگر</small></label><div id="auth-error"></div><button class="button" type="submit">ورود به پنل ${icon('arrow')}</button></form><button type="button" class="auth-link" data-action="forgot">رمز عبور را فراموش کرده ام</button>${registration.registrationEnabled?'<button type="button" class="auth-link" data-action="register">ساخت حساب جدید</button>':'<p class="help">ثبت نام جدید تا تنظیم سرویس تایید در سرور فعال نیست</p>'}`;
  }
  return `<div class="auth-page"><section class="auth-art"><div class="brand"><span class="brand-mark">${icon('posts')}</span><strong>محتوان</strong></div><h1>یک حساب برای<br>مدیریت همه برندهای شما</h1><p>محتوا، کانال ها، اعضا و اتصال هوش مصنوعی هر برند در فضای جداگانه نگهداری میشود</p></section><section class="auth-form-side"><div class="auth-box"><h2>${title}</h2>${content}</div></section></div>`;
 }
