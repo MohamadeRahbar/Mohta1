@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {contentSecurityPolicy} from '../security-headers.mjs';
+import {contentSecurityPolicy} from '../src/http/security-headers.mjs';
 
 const directives=policy=>Object.fromEntries(policy.split(';').map(part=>part.trim().split(/\s+/)).map(([name,...sources])=>[name,sources]));
 

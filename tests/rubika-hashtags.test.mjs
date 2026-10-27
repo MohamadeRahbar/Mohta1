@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {hashtagRanges,rubikaEntities} from '../public/rubika-format.js';
-import {delivery} from '../delivery.mjs';
-import {sendPost} from '../publish-adapters.mjs';
+import {delivery} from '../src/publishing/delivery.mjs';
+import {sendPost} from '../src/publishing/publish-adapters.mjs';
 test('Rubika styles keep native hashtag ranges plain without changing text, UTF-16 offsets or explicit links',()=>{
  const body='👋🏻 فروش #سرور_نیو و #HPE و #آفر',all={type:'bold',offset:0,length:body.length},tags=hashtagRanges(body);
  assert.deepEqual(tags.map(tag=>body.slice(tag.offset,tag.offset+tag.length)),['#سرور_نیو','#HPE','#آفر']);

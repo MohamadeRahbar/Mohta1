@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {telegramTarget,checkTelegramAccess} from '../telegram-access.mjs';
+import {telegramTarget,checkTelegramAccess} from '../src/channels/telegram-access.mjs';
 
 const token='123456:FAKE_LOCAL_TEST_TOKEN_123456789';
 const channel={id:'telegram',platform:'telegram',target:'example_channel',route:'direct'};

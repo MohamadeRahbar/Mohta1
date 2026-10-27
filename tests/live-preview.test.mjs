@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {previewDocument} from '../public/caption-template.js';
-import {renderContentDocument,validateFields,postTitle} from '../content.mjs';
+import {renderContentDocument,validateFields,postTitle} from '../src/content/content.mjs';
 import {richMarkup} from '../public/rich-text.js';
 const settings={brand:'برند نمونه',currency:'تومان',website:'https://example.com',contact:'تماس قدیمی'};
 test('live preview uses the exact same content and UTF-16 styles as server rendering for all five types',()=>{

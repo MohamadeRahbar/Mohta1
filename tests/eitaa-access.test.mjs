@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {checkEitaaAccess,eitaaSetupIssue} from '../eitaa-access.mjs';
+import {checkEitaaAccess,eitaaSetupIssue} from '../src/channels/eitaa-access.mjs';
 const token='123456:FAKE_LOCAL_TEST_TOKEN_123456789',channel={platform:'eitaa',target:'@fixture_channel',route:'direct'};
 const success={status:200,data:{ok:true,result:{id:123,is_bot:true,username:'fixture'}}};
 test('Eitaayar uses only getMe, the saved network route and no publication request',async()=>{

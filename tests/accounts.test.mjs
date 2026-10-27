@@ -7,9 +7,9 @@ import http from 'node:http';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
-import {identifier,openAccounts,createVerification,deliveryAdapter} from '../accounts.mjs';
-import {openStore} from '../store.mjs';
-import {passwordHash,hashToken} from '../auth.mjs';
+import {identifier,openAccounts,createVerification,deliveryAdapter} from '../src/accounts/accounts.mjs';
+import {openStore} from '../src/storage/store.mjs';
+import {passwordHash,hashToken} from '../src/accounts/auth.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)),password='account-fixture-password';
 function temp(t){return fs.mkdtempSync(path.join(os.tmpdir(),'desk-accounts-'));}
 test('login identifiers normalize mobile digits and reject malformed contact values',()=>{

@@ -5,11 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import {randomUUID} from 'node:crypto';
-import {openStore} from '../store.mjs';
-import {createPublisher} from '../publisher.mjs';
-import {sendPost,baleText,channelAvailability} from '../publish-adapters.mjs';
-import {requestJson} from '../network.mjs';
-import {multipart} from '../multipart.mjs';
+import {openStore} from '../src/storage/store.mjs';
+import {createPublisher} from '../src/publishing/publisher.mjs';
+import {sendPost,baleText,channelAvailability} from '../src/publishing/publish-adapters.mjs';
+import {requestJson} from '../src/infrastructure/network.mjs';
+import {multipart} from '../src/http/multipart.mjs';
 const token='123:'+('fixture_secret_'.repeat(3));
 const route=async()=>({proxy:''});
 function fixture(t,channels=['telegram']){

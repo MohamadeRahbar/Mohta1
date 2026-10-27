@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import {requestJson} from '../network.mjs';
-import {openStore} from '../store.mjs';
-import {saveChannelSettings} from '../channel-settings.mjs';
-import {windowsProxyFor,resolveNetworkRoute,publicRoute} from '../system-network.mjs';
-import {classifyApiFailure,diagnoseConnectionFailure,requestChannel} from '../connection-diagnostics.mjs';
+import {requestJson} from '../src/infrastructure/network.mjs';
+import {openStore} from '../src/storage/store.mjs';
+import {saveChannelSettings} from '../src/channels/channel-settings.mjs';
+import {windowsProxyFor,resolveNetworkRoute,publicRoute} from '../src/infrastructure/system-network.mjs';
+import {classifyApiFailure,diagnoseConnectionFailure,requestChannel} from '../src/infrastructure/connection-diagnostics.mjs';
 
 test('system network is default; migration preserves token and explicit proxies',()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'desk-network-'));let store=openStore(directory);

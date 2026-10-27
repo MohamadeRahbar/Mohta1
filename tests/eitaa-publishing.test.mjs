@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {sendPost,adapterPreflight,channelAvailability} from '../publish-adapters.mjs';
+import {sendPost,adapterPreflight,channelAvailability} from '../src/publishing/publish-adapters.mjs';
 const token='123456:FAKE_LOCAL_TEST_TOKEN_123456789',channel={platform:'eitaa',enabled:true,target:'@fixture_channel',route:'direct'},post={type:'free',title:'Internal',body:'سلام کالاپینگ 👋🏻\n#KalaPing',body_entities:[{type:'bold',offset:5,length:8}],fields:{},channels:['eitaa'],media:[],publication_media_ids:[]};
 const account={status:200,data:{ok:true,result:{id:123,is_bot:false}}},route=async()=>({source:'system_routing',proxy:''});
 test('Eitaayar sends the exact text once, strips @, uses only documented methods and accepts a receipt',async()=>{

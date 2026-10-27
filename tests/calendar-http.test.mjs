@@ -6,7 +6,7 @@ import path from 'node:path';
 import http from 'node:http';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {openStore} from '../store.mjs';
+import {openStore} from '../src/storage/store.mjs';
 
 test('calendar and post detail APIs enforce authentication, destination grants, timezone validation and brand isolation',async t=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'mohta-cal-http-')),reservation=http.createServer();await new Promise(r=>reservation.listen(0,'127.0.0.1',r));const port=reservation.address().port;await new Promise(r=>reservation.close(r));

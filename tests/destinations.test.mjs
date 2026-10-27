@@ -4,12 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {openStore,publicPost,publicUser} from '../store.mjs';
-import {createDestination,removeDestination,destinationIdentity} from '../destinations.mjs';
-import {saveChannelSettings} from '../channel-settings.mjs';
-import {createPublisher} from '../publisher.mjs';
-import {queuePublication,createScheduler} from '../scheduler.mjs';
-import {validateReady} from '../delivery.mjs';
+import {openStore,publicPost,publicUser} from '../src/storage/store.mjs';
+import {createDestination,removeDestination,destinationIdentity} from '../src/channels/destinations.mjs';
+import {saveChannelSettings} from '../src/channels/channel-settings.mjs';
+import {createPublisher} from '../src/publishing/publisher.mjs';
+import {queuePublication,createScheduler} from '../src/publishing/scheduler.mjs';
+import {validateReady} from '../src/publishing/delivery.mjs';
 const token='123:fixture_secret_1234567890123456';
 
 function fixture(t){

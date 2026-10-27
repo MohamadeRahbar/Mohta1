@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {generateKeyPairSync,sign,createHash} from 'node:crypto';
-import {openStore} from '../store.mjs';
-import {createChatGPTService,verifyOpenAIIdentity,parseResponseStream,modelPreferences} from '../chatgpt.mjs';
+import {openStore} from '../src/storage/store.mjs';
+import {createChatGPTService,verifyOpenAIIdentity,parseResponseStream,modelPreferences} from '../src/ai/chatgpt.mjs';
 
 const {privateKey,publicKey}=generateKeyPairSync('rsa',{modulusLength:2048});
 const jwk={...publicKey.export({format:'jwk'}),kid:'test-key',alg:'RS256',use:'sig'},clientId='oaiapp_local_test';

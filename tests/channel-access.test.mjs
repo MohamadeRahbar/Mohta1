@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {checkChannelAccess,channelSetupIssue} from '../channel-access.mjs';
+import {checkChannelAccess,channelSetupIssue} from '../src/channels/channel-access.mjs';
 const token='123456:FAKE_LOCAL_TEST_TOKEN_123456789';
 test('missing configuration never makes a network call',async()=>{
  for(const platform of ['telegram','bale','rubika','eitaa']){

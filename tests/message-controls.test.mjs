@@ -4,12 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {openStore,publicPost} from '../store.mjs';
-import {createMessageControls} from '../message-controls.mjs';
-import {createPublisher} from '../publisher.mjs';
-import {createLinkTracking,rewriteTrackedPayload} from '../link-tracking.mjs';
-import {messageCapabilities} from '../message-options.mjs';
-import {sendPost} from '../publish-adapters.mjs';
+import {openStore,publicPost} from '../src/storage/store.mjs';
+import {createMessageControls} from '../src/publishing/message-controls.mjs';
+import {createPublisher} from '../src/publishing/publisher.mjs';
+import {createLinkTracking,rewriteTrackedPayload} from '../src/tracking/link-tracking.mjs';
+import {messageCapabilities} from '../src/publishing/message-options.mjs';
+import {sendPost} from '../src/publishing/publish-adapters.mjs';
 function fixture(t,platforms=['telegram','bale']){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'mohta-controls-')),store=openStore(directory),id=randomUUID(),actor={id:randomUUID(),role:'admin',channels:platforms,active:1},now=new Date().toISOString();
  store.db.prepare('INSERT INTO users(id,username,name,password,role,channels,created_at) VALUES(?,?,?,?,?,?,?)').run(actor.id,'owner','Owner','unused','admin',JSON.stringify(platforms),now);
