@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeEntities,cleanDocument,rebaseEntities,richMarkup} from '../public/rich-text.js';
-import {validateFields,renderContentDocument,prepareDocument,postTitle} from '../content.mjs';
-import {delivery,validateReady} from '../delivery.mjs';
-import {buildTextPrompt} from '../text-assist.mjs';
+import {validateFields,renderContentDocument,prepareDocument,postTitle} from '../src/content/content.mjs';
+import {delivery,validateReady} from '../src/publishing/delivery.mjs';
+import {buildTextPrompt} from '../src/ai/text-assist.mjs';
 const settings={brand:'BRAND',contact:'CONTACT',website:'https://brand.example',currency:'تومان'};
 const message='سلام و درود خدمت همراهان گرامی 👋🏻\nامروز سورپرایز ویژه ای داریم تا خرید شما با تخفیف وِیژه انجام شود\nهمراه ما باشید';
 test('free messages contain exactly the authored text for every destination, even with defaults and injected footers',()=>{

@@ -7,10 +7,10 @@ import http from 'node:http';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
-import {openAccounts} from '../accounts.mjs';
-import {hashToken,startSession} from '../auth.mjs';
-import {createRememberedDevices} from '../remembered-device.mjs';
-import {changePassword} from '../recovery.mjs';
+import {openAccounts} from '../src/accounts/accounts.mjs';
+import {hashToken,startSession} from '../src/accounts/auth.mjs';
+import {createRememberedDevices} from '../src/accounts/remembered-device.mjs';
+import {changePassword} from '../src/accounts/recovery.mjs';
 
 test('remembered credentials are hashed, rotate, pause after logout, have no fixed expiry and revoke with password changes',t=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'desk-remember-')),accounts=openAccounts(directory);

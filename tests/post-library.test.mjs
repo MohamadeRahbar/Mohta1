@@ -8,9 +8,9 @@ import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
-import {openStore,publicPost} from '../store.mjs';
-import {changePostLibrary} from '../post-library.mjs';
-import {createPublisher} from '../publisher.mjs';
+import {openStore,publicPost} from '../src/storage/store.mjs';
+import {changePostLibrary} from '../src/content/post-library.mjs';
+import {createPublisher} from '../src/publishing/publisher.mjs';
 import {libraryState,canManageLibrary,filterLibrary} from '../public/post-library.js';
 
 function fixture(t){

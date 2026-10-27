@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {openStore} from '../store.mjs';
-import {createChannelVerifier} from '../channel-verifier.mjs';
-import {checkChannelAccess} from '../channel-access.mjs';
+import {openStore} from '../src/storage/store.mjs';
+import {createChannelVerifier} from '../src/channels/channel-verifier.mjs';
+import {checkChannelAccess} from '../src/channels/channel-access.mjs';
 const token='123456:FAKE_LOCAL_TEST_TOKEN_123456789',bot={id:123456,is_bot:true},chat={id:-1001234567,type:'channel',title:'Fixture'};
 function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'desk-verify-')),store=openStore(dir);t.after(()=>{store.close();fs.rmSync(dir,{recursive:true,force:true});});return store;}
 const input={name:'Channel',target:'@fixture',route:'direct',enabled:true,token};

@@ -7,7 +7,7 @@ import http from 'node:http';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
-import {openStore} from '../store.mjs';
+import {openStore} from '../src/storage/store.mjs';
 
 test('message controls HTTP: pin persistence, real route receipts, CSRF, access and brand isolation',async t=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'mohta-msg-http-')),reservation=http.createServer();await new Promise(r=>reservation.listen(0,'127.0.0.1',r));const port=reservation.address().port;await new Promise(r=>reservation.close(r));

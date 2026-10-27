@@ -1,13 +1,16 @@
 {
   "name": "content-desk",
   "private": true,
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "engines": {
     "node": ">=24.0.0 <25"
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test --test-concurrency=2 --test-timeout=60000 tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "package": "node scripts/package-release.mjs",
+    "recover-password": "node scripts/recover-password.mjs"
   }
 }

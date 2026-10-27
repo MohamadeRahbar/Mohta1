@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {openStore} from '../store.mjs';
+import {openStore} from '../src/storage/store.mjs';
 
 test('legacy custom project names are ignored without rewriting saved brand data on read',t=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'desk-app-name-'));let store=openStore(directory);

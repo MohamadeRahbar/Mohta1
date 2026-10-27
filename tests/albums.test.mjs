@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';
-import {publicationMedia} from '../public/media.js';import {delivery,validateReady} from '../delivery.mjs';import {streamMedia} from '../media-stream.mjs';
+import {publicationMedia} from '../public/media.js';import {delivery,validateReady} from '../src/publishing/delivery.mjs';import {streamMedia} from '../src/http/media-stream.mjs';
 
 test('albums preserve selection and order, with one caption and no additional text message',()=>{
  const post={media:['first','clip','unused','last'],publication_media_ids:['clip','last','first'],body:'عنوان\n\nمتن',channels:['telegram'],fields:{contact_config:{phones:[{type:'phone',number:'02112345678'}]}}};

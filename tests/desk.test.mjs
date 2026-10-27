@@ -7,10 +7,10 @@ import http from 'node:http';
 import {spawn,spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
-import {delivery,validateReady} from '../delivery.mjs';
-import {requestJson,validateProxy} from '../network.mjs';
-import {renderContent,alignHeadline,titleText} from '../content.mjs';
-import {buildTextPrompt} from '../text-assist.mjs';
+import {delivery,validateReady} from '../src/publishing/delivery.mjs';
+import {requestJson,validateProxy} from '../src/infrastructure/network.mjs';
+import {renderContent,alignHeadline,titleText} from '../src/content/content.mjs';
+import {buildTextPrompt} from '../src/ai/text-assist.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64');
 
@@ -266,7 +266,7 @@ test('authenticated content desk lifecycle',async t=>{
    for(const key of ['dailyLimit','slots','paused'])assert(!Object.hasOwn(raw,key));
  });
  await t.test('password changes and local one-time recovery revoke sessions and preserve content',async()=>{
-   function grant(){const result=spawnSync(process.execPath,['recover-password.mjs','--data-dir',dataDir,'--username','owner','--base-url',origin],{cwd:root,encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stderr);const value=JSON.parse(result.stdout);return new URLSearchParams(new URL(value.url).hash.slice(1)).get('reset');}
+   function grant(){const result=spawnSync(process.execPath,['scripts/recover-password.mjs','--data-dir',dataDir,'--username','owner','--base-url',origin],{cwd:root,encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stderr);const value=JSON.parse(result.stdout);return new URLSearchParams(new URL(value.url).hash.slice(1)).get('reset');}
    const extra=client(),anonymous=client();await extra.call('/api/login','POST',{username:'owner',password:'local-test-password'});
    const count=(await owner.call('/api/state')).value.posts.length,oldGrant=grant();
    assert.equal((await anonymous.call('/api/account/password','POST',{currentPassword:'local-test-password',password:'changed-password-123',confirmation:'changed-password-123'})).status,401);

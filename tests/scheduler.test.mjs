@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {openStore,publicPost} from '../store.mjs';
-import {createPublisher} from '../publisher.mjs';
-import {queuePublication,createScheduler,cancelScheduled,reconcileScheduledResult} from '../scheduler.mjs';
-import {changePostLibrary} from '../post-library.mjs';
+import {openStore,publicPost} from '../src/storage/store.mjs';
+import {createPublisher} from '../src/publishing/publisher.mjs';
+import {queuePublication,createScheduler,cancelScheduled,reconcileScheduledResult} from '../src/publishing/scheduler.mjs';
+import {changePostLibrary} from '../src/content/post-library.mjs';
 
 function fixture(t,channels=['telegram','bale']){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'desk-schedule-'));let store=openStore(directory),time=Date.now()+60000,sends=0;

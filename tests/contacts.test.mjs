@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeContacts,appendContacts,contactEntities} from '../public/contacts.js';
-import {renderContent,validateFields} from '../content.mjs';
-import {delivery,validateReady} from '../delivery.mjs';
+import {renderContent,validateFields} from '../src/content/content.mjs';
+import {delivery,validateReady} from '../src/publishing/delivery.mjs';
 
 const contacts={phones:[{type:'phone',number:'۰۲۱ ۱۲۳۴ ۵۶۷۸',label:'فروش'},{type:'mobile',number:'0098 912 123 4567',label:''}],admins:{telegram:'tg_admin',bale:'@bale_admin',rubika:'@rubika_admin',whatsapp:'+989121234567',eitaa:'@eitaa_admin'}};
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {syncComposer,editComposer,rebuildComposer,undoComposer,signatureOf} from '../public/composer.js';
-import {prepareDocument} from '../content.mjs';
+import {prepareDocument} from '../src/content/content.mjs';
 
 const input={type:'stock',title:'Headline',fields:{brand:'HPE',model:'DL380',description:'Original'},channels:['telegram'],media:[]};
 test('manual document survives changes to structured fields, title and destination, including reopen',()=>{
