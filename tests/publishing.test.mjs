@@ -21,6 +21,17 @@ function fixture(t,channels=['telegram']){
  t.after(()=>{store.close();fs.rmSync(directory,{recursive:true,force:true});});return {store,post,actor};
 }
 const telegramSuccess=async(url,options)=>url.endsWith('/getChat')?{status:200,data:{ok:true,result:{id:-100123,type:'channel'}}}:{status:200,data:{ok:true,result:{message_id:123}}};
+test('stored destination documents are used for initial publication and selective retry',async t=>{
+ const {store,post,actor}=fixture(t,['telegram','bale']);const documents={telegram:{body:'Telegram only',entities:[]},bale:{body:'Bale only',entities:[]}};
+ store.db.prepare('UPDATE posts SET destination_documents=? WHERE id=?').run(JSON.stringify(documents),post.id);
+ const calls=[];let fail=true;const service=createPublisher(store,{resolveRoute:route,request:async(url,options)=>{
+  if(url.endsWith('/getChat'))return telegramSuccess(url);
+  const platform=url.includes('bale')?'bale':'telegram';calls.push({platform,body:options.body.text});
+  if(platform==='bale'&&fail)return {status:403,data:{ok:false}};return telegramSuccess(url);
+ }});
+ await service.publish(post.id,1,actor);fail=false;const result=await service.publish(post.id,1,actor,{channelIds:['bale']});
+ assert.equal(result.sent,2);assert.deepEqual(calls,[{platform:'telegram',body:'Telegram only'},{platform:'bale',body:'Bale only'},{platform:'bale',body:'Bale only'}]);
+});
 test('four destinations: explicit unknown resolution enables repeatable selective retries without duplicate successes',async t=>{
  const {store,post,actor}=fixture(t,['telegram','bale','rubika','eitaa']);let eitaaFail=true;const sends=[];
  store.db.prepare("INSERT INTO scheduled_publications(post_id,run_id,version,run_at,actor_id,state,message,updated_at) VALUES(?,?,1,?,?,'failed','old scheduling failure',?)").run(post.id,randomUUID(),new Date().toISOString(),actor,new Date().toISOString());

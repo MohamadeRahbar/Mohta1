@@ -1,0 +1,18 @@
+{
+  "version": "17.0",
+  "count": 3944,
+  "sources": [
+    "https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt",
+    "https://github.com/unicode-org/cldr-json"
+  ],
+  "hashes": {
+    "emoji-test.txt": "1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda",
+    "fa.json": "8cfef030b2e3520ee875f21ccc33d56d8fa8c567a2888670971039b02c11840e",
+    "fa-derived.json": "ad40f2b510406917ebb7558f12856e438f6270e365477d14bedf2494b2a43ec3"
+  },
+  "font": {
+    "sha256": "15671215ab769fdc7162a045d56fd7d7e477c51b04e6b3c761d914d8fdd6cc44",
+    "source": "https://github.com/googlefonts/noto-emoji/tree/main/2D/fonts",
+    "license": "LICENSES/Noto-Emoji-OFL.txt"
+  }
+}

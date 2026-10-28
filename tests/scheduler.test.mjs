@@ -23,6 +23,13 @@ function fixture(t,channels=['telegram','bale']){
  return {get store(){return store;},actor,id,read,job,services,get sends(){return sends;},advance(ms=60000){time+=ms;},queue(){return queuePublication(store,read(),actor,read().version,{clock:()=>time});},restart(){store.close();store=openStore(directory);}};
 }
 
+test('scheduled publication loads saved destination documents after restart',async t=>{
+ const f=fixture(t),calls=[];f.store.db.prepare('UPDATE posts SET destination_documents=? WHERE id=?').run(JSON.stringify({bale:{body:'Scheduled Bale',entities:[]}}),f.id);
+ f.queue();f.restart();const {scheduler}=f.services({request:async(url,options)=>{
+  if(url.endsWith('/sendMessage'))calls.push(options.body.text);
+  return {status:200,data:{ok:true,result:url.endsWith('/getChat')?{id:-100123,type:'channel'}:{message_id:123}}};
+ }});f.advance();await scheduler.runDue();assert.deepEqual(calls.sort(),['Exact content','Scheduled Bale'].sort());assert.equal(f.job().state,'completed');await scheduler.stop();
+});
 test('a stale failed job is completed on recovery only when every current destination is confirmed',async t=>{
  const f=fixture(t);f.queue();f.store.db.prepare("UPDATE scheduled_publications SET state='failed',message='original failure'").run();
  f.store.db.prepare("UPDATE posts SET status='published'").run();

@@ -356,3 +356,21 @@ details.settings-accordion:not([open])::details-content{block-size:0}
 .publication-result .delivery-resolution,.publication-result .delivery-history{margin-top:12px}.delivery-resolution{padding:12px;background:#fff8eb;border:1px solid #eedcc0;border-radius:8px}.delivery-history ol{padding-inline-start:22px}.delivery-history li{padding:10px 0;border-bottom:1px solid var(--line);font-size:12px;overflow-wrap:anywhere}.delivery-history summary,.delivery-resolution summary{cursor:pointer}.publication-modal [data-report-status]{color:var(--danger)}.publication-result>bdi{overflow-wrap:anywhere}.publication-result>small{display:block}
 
 .remember-login{margin:0 0 18px;flex-wrap:wrap;justify-content:flex-start;gap:8px}.remember-login small{color:var(--muted);font-size:11px}.remembered-account{padding:18px;margin-bottom:18px;border:1px solid var(--line);border-radius:9px;background:var(--white)}.remembered-account strong,.remembered-account bdi{display:block}.remembered-account bdi{font-size:12px;color:var(--muted)}.remembered-account p{margin:12px 0 0;font-size:12px}
+.destination-document{padding-block:16px;border-top:1px solid #dde7e8;min-width:0}
+.destination-document .field{margin-block:12px 8px}
+.destination-document textarea{min-height:130px;resize:vertical;max-width:100%;line-height:1.9}
+.post-detail-header{display:flex;align-items:center;gap:12px;margin-bottom:18px;position:sticky;top:0;background:#fff;z-index:2;padding-block:6px}
+.post-detail-header h2{margin:0;flex:1;min-width:0}
+.post-detail-close{flex:0 0 38px;width:38px;height:38px;padding:8px;display:grid;place-items:center}
+.destination-documents>summary{font-weight:600;color:var(--green);padding-block:10px;cursor:pointer}
+.destination-documents .destination-document:first-child{border-top:0}
+.emoji-controls{display:flex;gap:6px;align-items:center;min-width:0}
+.emoji-controls select{min-width:0;flex:1;padding:6px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-size:11px}
+.emoji-close{flex:none;width:32px;height:32px;border-radius:6px;background:#edf2f2;color:var(--ink);font-size:24px;line-height:1}
+.emoji-picker .emoji-grid{max-height:240px;overscroll-behavior:contain;scrollbar-width:thin;direction:ltr}
+.emoji-results{font-size:10px;color:var(--muted);margin:4px 0}
+.emoji-more{margin-bottom:8px}
+@font-face{font-family:MohtaEmoji;src:url('/fonts/NotoColorEmoji.ttf') format('truetype');font-display:swap}
+.emoji-grid button{font-family:"Apple Color Emoji",MohtaEmoji,"Segoe UI Emoji",sans-serif;min-width:0;max-width:100%;padding:0;overflow:hidden}
+.emoji-picker .emoji-grid{overflow-x:hidden;grid-template-columns:repeat(auto-fill,minmax(38px,1fr))}
+.rich-input,.preview-message,.destination-document textarea{font-family:Vazirmatn,"Apple Color Emoji",MohtaEmoji,"Segoe UI Emoji",sans-serif}

@@ -38,7 +38,7 @@ export function baleText(body,entities=[]){
  }).join('');
 }
 export function adapterPreflight(post,channel,token,files,prepared){
- const platform=channel.platform,payload=prepared||delivery(post,platform),body=payload.caption??payload.text;
+ const platform=channel.platform,payload=prepared||delivery(post,channel),body=payload.caption??payload.text;
  if(['telegram','bale'].includes(platform)){
   if(!/^\d+:[A-Za-z0-9_-]{20,}$/.test(token))throw refusal('token_invalid','ساختار توکن ربات معتبر نیست.');
   if(!telegramTarget(channel.target))throw refusal('target_invalid','شناسهٔ کانال باید @username یا شناسهٔ عددی کانال باشد.');
@@ -56,7 +56,7 @@ export function adapterPreflight(post,channel,token,files,prepared){
  return payload;
 }
 export async function sendPost(post,channel,{token,files,request,resolveRoute,manualProxy,replyTo,pin=false,transformPayload}){
- const platform=channel.platform,prepared=transformPayload?transformPayload(delivery(post,platform)):null,payload=adapterPreflight(post,channel,token,files,prepared),base=bases[platform];let target=platform==='rubika'?channel.target:telegramTarget(channel.target);
+ const platform=channel.platform,prepared=transformPayload?transformPayload(delivery(post,channel)):null,payload=adapterPreflight(post,channel,token,files,prepared),base=bases[platform];let target=platform==='rubika'?channel.target:telegramTarget(channel.target);
  let sending=false,stage='preflight';
  async function call(url,options,final=false){
   stage=final?'send':options.bodyStream?'upload':'preflight';

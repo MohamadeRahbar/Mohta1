@@ -20,6 +20,14 @@ function fixture(t,platforms=['telegram','bale']){
 const route=async()=>({proxy:''});
 function transport(calls,{failBale=false,timeout=false}={}){return async(url,options)=>{const method=new URL(url).pathname.split('/').at(-1);calls.push({method,url,body:options.body,upload:!!options.bodyStream});if(method==='getChat')return url.includes('rubika')?{status:200,data:{data:{chat:{chat_type:'Channel',chat_id:'c0fixturechannel'}}}}:{status:200,data:{ok:true,result:{id:-1001,type:'channel'}}};if(timeout)throw Error('123:private_token');if(failBale&&url.includes('bale'))return {status:403,data:{ok:false,description:'private token'}};return url.includes('rubika')?{status:200,data:{data:{message_id:'rubika-id'}}}:{status:200,data:{ok:true,result:method==='sendMessage'?{message_id:333}:true}};};}
 function input(f,extra={}){return {action:'edit',channels:['telegram','bale'],version:1,revision:f.post().control_revision,request_id:randomUUID(),body:'Updated 👋🏻 #تست',entities:[{type:'bold',offset:0,length:7}],...extra};}
+test('remote receipts show dedicated documents and explicit edits replace the chosen destination document',async t=>{
+ const f=fixture(t),calls=[],service=createMessageControls(f.store,{request:transport(calls),resolveRoute:route});
+ f.store.db.prepare('UPDATE posts SET destination_documents=? WHERE id=?').run(JSON.stringify({telegram:{body:'Dedicated original',entities:[]}}),f.id);
+ assert.equal(service.snapshot(f.post(),f.actor).receipts.find(r=>r.channel_id==='telegram').body,'Dedicated original');
+ const data=input(f,{channels:['telegram']});await service.run(f.id,data,f.actor);
+ assert.equal(calls.find(c=>c.method==='editMessageText').body.text,data.body);
+ assert.equal(service.snapshot(f.post(),f.actor).receipts.find(r=>r.channel_id==='telegram').body,data.body);
+});
 test('remote edits preserve original publication, record per-destination failures and deduplicate a lost client response',async t=>{
  const f=fixture(t),calls=[],service=createMessageControls(f.store,{request:transport(calls,{failBale:true}),resolveRoute:route}),data=input(f);
  let result=await service.run(f.id,data,f.actor);assert.equal(result.operations.filter(op=>op.status==='success').length,1);assert.equal(result.operations.filter(op=>op.status==='failed').length,1);assert.equal(f.post().body,'Original body');assert.equal(f.post().version,1);assert.equal(f.post().remote_body,data.body);

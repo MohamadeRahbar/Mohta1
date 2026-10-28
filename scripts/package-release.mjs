@@ -12,7 +12,7 @@ const output=path.join(root,'artifacts'),name='mohta1-v'+version;
 fs.mkdirSync(output,{recursive:true});
 const stage=fs.mkdtempSync(path.join(output,name+'-'));
 // A positive allowlist prevents installation data and local review tools from entering releases.
-const entries=['server.mjs','package.json','src','public','scripts','docs','deploy','README.md','CHANGELOG.fa.md','Dockerfile'];
+const entries=['server.mjs','package.json','src','public','scripts','docs','deploy','LICENSES','README.md','CHANGELOG.fa.md','Dockerfile'];
 function files(directory,prefix=''){
  return fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry=>{
   assert(!entry.isSymbolicLink(),'Release source must not contain symlinks');
